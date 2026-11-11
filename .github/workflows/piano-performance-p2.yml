@@ -1,0 +1,60 @@
+name: P2 piano touch — phrase dynamics, independent performance QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/piano_performance.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_piano_performance_p2.py'
+      - 'tests/test_performance_combination_p2.py'
+      - 'tools/compare_piano_p2.py'
+      - '.github/workflows/piano-performance-p2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  piano-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline renderer and GM fixture
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Verify piano, bass, guitar, polyphony and module independence
+        run: |
+          python -m unittest tests.test_studio7 tests.test_articulation tests.test_playing_p2 tests.test_bass_performance_p2 tests.test_piano_performance_p2 tests.test_performance_combination_p2 -v
+      - name: Render identical-patch piano A/B
+        run: |
+          python -m tools.compare_piano_p2 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p2-piano-preview
+          ffmpeg -v error -xerror -i p2-piano-preview/P2_piano_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p2-piano-preview/P2_piano_after.mp3 -f null -
+      - name: Test complete arrangement with only piano selected
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style silver --piano-performance --out p2-piano-integrated
+          test -f p2-piano-integrated/silver-v7-p2-piano.mp3
+          test -f p2-piano-integrated/verification_v7.json
+      - name: Test all three performance modules simultaneously
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style silver --guitar-performance --bass-performance --piano-performance --out p2-combined
+          test -f p2-combined/silver-v7-p2-guitar-p2-bass-p2-piano.mp3
+          test -f p2-combined/verification_v7.json
+      - name: Retain engineering comparisons, not a finished song release
+        uses: actions/upload-artifact@v4
+        with:
+          name: P2-Piano-and-Combined-Technical-Comparisons
+          path: |
+            p2-piano-preview/P2_piano_*.mp3
+            p2-piano-preview/P2_piano_report.json
+            p2-piano-integrated/verification_v7.json
+            p2-combined/verification_v7.json
+          retention-days: 90
