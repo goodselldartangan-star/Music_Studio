@@ -34,6 +34,30 @@ class ArticulationTests(unittest.TestCase):
         piano=planned_events(notes,120,part='piano')
         self.assertGreater(lead[0]['off'],lead[1]['at'])
         self.assertLess(piano[0]['off'],piano[1]['at'])
+    def test_recorded_repluck_preserves_old_note_tail(self):
+        # A short second pluck contributes a new attack while a long one decays.
+        t=np.arange(3*SR,dtype=np.float32)/SR
+        recording=(.17*np.sin(2*np.pi*196*t)*np.exp(-.23*t)).astype(np.float32)
+        held=smooth_release(recording,1.5,part='acoustic')
+        struck=smooth_release(recording,.18,part='acoustic')
+        onset=round(.42*SR)
+        mix=np.zeros(max(len(held),onset+len(struck)),np.float32)
+        mix[:len(held)]+=held
+        mix[onset:onset+len(struck)]+=struck
+        pos=onset+len(struck)+round(.02*SR)
+        self.assertGreater(float(np.sqrt(np.mean(mix[pos:pos+400]**2))),.03)
+        before=float(np.sqrt(np.mean(held[onset:onset+200]**2)))
+        after=float(np.sqrt(np.mean(mix[onset:onset+200]**2)))
+        self.assertGreater(abs(after-before),.0005)
+
+    def test_chord_and_same_pitch_repluck_use_independent_voices(self):
+        notes=[{'at':0.,'off':1.2,'pitch':60,'velocity':85},
+               {'at':0.,'off':1.2,'pitch':64,'velocity':85},
+               {'at':0.,'off':1.2,'pitch':67,'velocity':85},
+               {'at':.4,'off':.8,'pitch':60,'velocity':90}]
+        voices=assign_voice_channels(notes,release_guard_s=.24)
+        self.assertEqual([v['channel'] for v in voices],[0,0,0,1])
+
     def test_retriggered_same_pitch_uses_an_independent_voice(self):
         notes=[{'beat':0,'length':1.5,'pitch':64,'velocity':98},
                {'beat':1.0,'length':1.5,'pitch':64,'velocity':93}]
