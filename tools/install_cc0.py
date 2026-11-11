@@ -17,6 +17,12 @@ PACKS = {
     'meta-steel-guitar': ('meta-steel-guitar-v1.0.0', 'meta-open-sound-meta-steel-guitar-ogg.zip', 35_000_000),
     'meta-piano': ('meta-piano-v1.0.0', 'meta-open-sound-meta-piano-ogg.zip', 60_000_000),
 }
+# SHA256 observed from the publisher's unmodified release ZIPs during the first
+# successful authenticated-public GitHub Actions retrieval on 2026-11-11.
+PINNED_SHA256 = {
+    'meta-steel-guitar': 'a06baf193497ba36f20ccb67018e9f106155ad5e4f81d8a672530498038f68ed',
+    'meta-piano': '4ba8095f5c2a70396d14f3b9c563f6c9010a093893159bad50e83145e1c35d40',
+}
 
 
 def download_pack(kind: str, cache: Path) -> Path:
@@ -50,6 +56,9 @@ def install_pack(kind: str, archive: Path, dest: Path) -> dict:
     tag, filename, max_bytes = PACKS[kind]
     if archive.stat().st_size > max_bytes:
         raise ValueError('Archive size outside publisher bounds')
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if archive.name == filename and digest != PINNED_SHA256[kind]:
+        raise ValueError(f'Publisher archive checksum changed for {kind}; inspect source before using')
     target = dest / kind
     target.mkdir(parents=True, exist_ok=True)
     count = 0
@@ -72,7 +81,7 @@ def install_pack(kind: str, archive: Path, dest: Path) -> dict:
         raise ValueError(f'No OGG sample files in {archive}')
     return {'collection': kind, 'license': 'CC0-1.0', 'release_tag': tag,
             'asset': filename, 'files': count,
-            'download_sha256': hashlib.sha256(archive.read_bytes()).hexdigest()}
+            'download_sha256': digest}
 
 
 def main():
