@@ -1,0 +1,78 @@
+name: Music Studio v6 — recorded instruments, 3 listening demos
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio6/**'
+      - 'tools/install_soundfonts.py'
+      - '.github/workflows/real-recordings-v6.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  render-realistic-demos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ordinary offline instruments and software (no AI services)
+        run: |
+          python -m pip install -r requirements.txt py7zr imageio-ffmpeg
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3
+          mkdir -p "$RUNNER_TEMP/bin"
+          python - <<'PY'
+          import imageio_ffmpeg, os
+          from pathlib import Path
+          ffmpeg=Path(os.environ['RUNNER_TEMP'])/'bin'/'ffmpeg'
+          ffmpeg.symlink_to(imageio_ffmpeg.get_ffmpeg_exe())
+          with open(os.environ['GITHUB_PATH'],'a') as f: f.write(str(ffmpeg.parent)+'\n')
+          PY
+      - name: Run all offline regression tests
+        run: python -m unittest discover -s tests -v
+      - name: Obtain CC0 Meta steel guitar and piano from the publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .v6-archives
+          gh release download meta-steel-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern meta-open-sound-meta-steel-guitar-ogg.zip --dir .v6-archives
+          gh release download meta-piano-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern meta-open-sound-meta-piano-ogg.zip --dir .v6-archives
+          python tools/install_cc0.py --no-download --guitar-zip .v6-archives/meta-open-sound-meta-steel-guitar-ogg.zip --piano-zip .v6-archives/meta-open-sound-meta-piano-ogg.zip --out assets/v6
+      - name: Obtain recorded Fender electric guitar, Yamaha electric bass, acoustic drum kit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download 2026-08-07 --repo freepats/electric-guitar-FSBS-clean --pattern 'EGuitarFSBS-clean-bridge-small-SF2-20260807.7z' --dir .v6-archives
+          gh release download 2019-09-30 --repo freepats/electric-bass-YR --pattern 'FingerBassYR-SF2-20190930.7z' --dir .v6-archives
+          gh release download 2020-10-18 --repo freepats/muldjordkit --pattern 'MuldjordKit-SF2-20201018.7z' --dir .v6-archives
+          python tools/install_soundfonts.py --archives .v6-archives --out assets/v6
+      - name: Render three genuinely different recorded-band demos
+        run: python -m studio6.render --assets assets/v6 --out v6-demos
+      - name: Verify audible stems, stereo encoding, levels, duration and sourced sounds
+        run: python -m studio6.verify --assets assets/v6 --out v6-demos
+      - name: Upload MP3 and instrument tracks for comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: MusicStudio-v6-Recorded-Band-Demos
+          path: |
+            v6-demos/*.mp3
+            v6-demos/*.score.json
+            v6-demos/verification.json
+            v6-demos/render_report.json
+            assets/v6/provenance.json
+            assets/v6/soundfont_provenance.json
+          retention-days: 90
+      - name: Publish verified user listening files (do not distribute copyrighted recordings)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view music-studio-v6-real-performers >/dev/null 2>&1 || \
+            gh release create music-studio-v6-real-performers --title 'Music Studio v6 — Recorded Ensemble Listening Demos' \
+             --notes 'Three original ~26–31-second instrumental sketches, arranged with genuinely distinct keys and grooves. Recorded CC0 guitar, piano, and electric bass samples; acoustic MuldjordKit percussion (CC BY 4.0). Drum samples provided by DrumGizmo.org. All samples are performed with offline FluidSynth/Meta samplers; the code is GPT-authored but no other generative AI was used. Technical audio QA passed; subjective listening is up to users.'
+          gh release upload music-studio-v6-real-performers \
+             v6-demos/porch-real.mp3 v6-demos/city-real.mp3 v6-demos/night-real.mp3 \
+             v6-demos/verification.json --clobber
