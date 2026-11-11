@@ -30,7 +30,8 @@ class Collection:
         d=min((abs(p-pitch),abs(layer-goal)) for _,p,layer in self.regions)
         candidates=[x for x in self.regions if (abs(x[1]-pitch),abs(x[2]-goal))==d]
         if d[0]>4:raise ValueError(f'{self.name}: pitch {pitch} is outside sampled range')
-        ix=int(hashlib.sha256(f'{seed}:{pitch}:{length}'.encode()).hexdigest()[:8],16)%len(candidates)
+        # Take identity is independent of duration, so articulation A/B keeps the same recording.
+        ix=int(hashlib.sha256(f'{seed}:{pitch}:{goal}'.encode()).hexdigest()[:8],16)%len(candidates)
         path,base,_=candidates[ix]
         sample=_resampled(path,base,pitch)
         duration=length*60/bpm
