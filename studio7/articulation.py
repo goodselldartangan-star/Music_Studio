@@ -79,21 +79,28 @@ def planned_events(notes: Sequence[dict], bpm:int, *, part:str='electric') -> li
 
 
 def assign_voice_channels(events:Sequence[dict], *, release_guard_s:float=.22) -> list[dict]:
-    """Assign different channels to notes whose sounding lifetimes overlap.
+    """Keep repeated *pitches* on different channels while their tails overlap.
 
-    Includes release tail in the reservation, so same-pitch retriggers don't
-    unexpectedly steal a previous voice during its decay.
+    MIDI note-off identifies (channel, pitch), not a unique voice. Different
+    pitches may safely share a channel even when they sound at the same time;
+    reserving an entire channel per note made ordinary 16-note piano voicings
+    fail. Same-pitch retriggers instead need isolated channels until their
+    release tails finish. Reuse channels deterministically when safe.
     """
     if not 0<=release_guard_s<=2:raise ValueError('Bad release guard')
-    busy_until={c:-1e9 for c in CHANNELS}
+    # For each channel, remember the final audible time for each pitch.
+    live:dict[int,dict[int,float]]={ch:{} for ch in CHANNELS}
     result=[]
     for e in sorted(events,key=lambda x:(x['at'],x['pitch'])):
-        if e['off']<=e['at']:raise ValueError('note ends before note-on')
-        available=[c for c in CHANNELS if busy_until[c]<=e['at']]
-        if not available:
-            raise ValueError('Too many simultaneous notes: split the stem or increase capacity')
-        ch=min(available,key=lambda c:(busy_until[c],c))
-        busy_until[ch]=e['off']+release_guard_s
+        at=float(e['at']);off=float(e['off']);pitch=int(e['pitch'])
+        if not (np.isfinite(at) and np.isfinite(off) and 0<=at<off
+                and 0<=pitch<=127 and 1<=int(e['velocity'])<=127):
+            raise ValueError('Invalid MIDI event for channel allocation')
+        # Prefer the first safe channel; different pitches can overlap there.
+        ch=next((c for c in CHANNELS if live[c].get(pitch,float('-inf'))<=at),None)
+        if ch is None:
+            raise ValueError('Too many simultaneous same-pitch notes: split the stem or increase capacity')
+        live[ch][pitch]=off+release_guard_s
         result.append({**e,'channel':ch})
     return result
 
