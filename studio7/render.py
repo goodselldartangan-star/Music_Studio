@@ -13,6 +13,7 @@ from .effects import highpass,lowpass,room_send,tap_delay,subtle_chorus,tremolo,
 from studio6.soundfonts import FluidSynth,render_sf2
 from .articulation import render_polyphonic,render_meta_note
 from .samples import Collection
+from .playing import shape_strums
 
 DRUM_MAP={'kick':36,'snare':38,'hat':42,'open_hat':46,'tom':45,'rim':37,'crash':49}
 GM_PROGRAM={'acoustic':25,'electric':27,'piano':0,'bass':33,'lead':26,'drums':0}
@@ -162,12 +163,17 @@ def process_stems(score:dict,raw:dict,with_effects=True)->tuple[np.ndarray,dict,
     return mixed,out,{'gain_used':gain_report,'peak_pre_gain':round(p,4),'master_scale':round(scale,4)}
 
 
-def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,with_effects=True):
+def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
+           with_effects=True,guitar_performance=False):
     score=make(style);validate(score)
+    performance_report=None
+    if guitar_performance:
+        score,performance_report=shape_strums(score)
+        validate(score)
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     raw=instrument_stems(score,assets=assets,gm=gm)
     mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects)
-    stem=f'{style}-v7'
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -176,7 +182,8 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,with_effec
                     '-metadata','artist=Music Studio (original instrumental)',str(mp3)],check=True)
     meta={'title':score['title'],'style':style,'backend':'GM preview (fallback)' if gm else 'recorded instruments',
           'duration_seconds':score['duration'],'score_notes':len(score['notes']),
-          'drum_hits':len(score['drums']), 'effects_enabled':with_effects,**diagnostics}
+          'drum_hits':len(score['drums']), 'effects_enabled':with_effects,
+          'guitar_performance':performance_report,**diagnostics}
     (out/(stem+'.score.json')).write_text(json.dumps(score,indent=2))
     (out/(stem+'.metadata.json')).write_text(json.dumps(meta,indent=2))
     return mp3,meta
