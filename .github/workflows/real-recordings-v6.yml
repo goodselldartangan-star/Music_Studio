@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'studio6/**'
+      - 'tests/test_v6.py'
       - 'tools/install_soundfonts.py'
       - '.github/workflows/real-recordings-v6.yml'
   workflow_dispatch:
