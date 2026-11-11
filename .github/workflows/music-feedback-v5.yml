@@ -48,10 +48,10 @@ jobs:
         run: |
           command -v ffmpeg
           ffmpeg -version | head -1
-      - name: Install FFprobe for existing audio quality tests
+      - name: Install a private FFprobe binary without system package changes
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          npm install --no-save ffprobe-static
+          ln -sf "$(node -p "require('ffprobe-static').path")" "$RUNNER_TEMP/music-audio-bin/ffprobe"
           command -v ffprobe
           ffprobe -version | head -1
       - name: Unit tests first
