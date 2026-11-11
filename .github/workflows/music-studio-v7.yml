@@ -108,6 +108,21 @@ jobs:
               assert (folder/f'{style}-v7-p2-guitar-p2-bass-p2-piano.mp3').is_file()
               print(style, {part:meta[f'{part}_performance'] for part in ('guitar','bass','piano')})
           PY
+      - name: Verify optional P3 bass/kick pocket on recorded-instrument sample backends
+        run: |
+          python demo_v7.py --assets assets/v7 --style after --rhythm-pocket --out v7-p3-after
+          python - <<'PY'
+          import json,pathlib
+          folder=pathlib.Path('v7-p3-after')
+          r=json.loads((folder/'verification_v7.json').read_text())[0]
+          meta=r['metadata']
+          assert meta['backend']=='recorded instruments'
+          assert meta['rhythm_pocket'] and meta['rhythm_pocket']['bass_anchors_moved']>0
+          assert meta['rhythm_pocket']['median_lag_after_ms']<meta['rhythm_pocket']['median_lag_before_ms']
+          assert r['audio_qa']['passed']
+          assert (folder/'after-v7-p3-pocket.mp3').is_file()
+          print('P3 real-sample timing experiment verified; listener preference untested')
+          PY
       - name: Retain all three listening demos and provenance
         uses: actions/upload-artifact@v4
         with:
@@ -120,6 +135,7 @@ jobs:
             v7-demos/sample_coverage_p1.json
             v7-p2-harbor/verification_v7.json
             v7-p2-silver/verification_v7.json
+            v7-p3-after/verification_v7.json
             assets/v7/*provenance*.json
           retention-days: 90
       - name: Publish new release without rewriting older recordings
