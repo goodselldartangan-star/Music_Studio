@@ -9,6 +9,7 @@ import json
 import math
 from collections import Counter
 from pathlib import Path
+import soundfile as sf
 from studio3.sample_bank import SampleBank, SOURCE_FOR_PART
 from studio3.spec import Note
 from studio7.samples import Collection
@@ -28,6 +29,29 @@ def audit_assets(root: Path) -> dict:
     sources['nylon']={'recordings':len(nylon.regions),'min_midi':min(r[1] for r in nylon.regions),
                       'max_midi':max(r[1] for r in nylon.regions),
                       'layers':sorted({r[2] for r in nylon.regions})}
+    # Probe soft/medium/strong recording layers on the same exact pitch.
+    velocity_probes={}
+    for name,records in {
+        'pluck':[(r.path,r.midi,r.layer) for r in bank.regions[SOURCE_FOR_PART['pluck']]],
+        'keys':[(r.path,r.midi,r.layer) for r in bank.regions[SOURCE_FOR_PART['keys']]],
+        'nylon':nylon.regions,
+    }.items():
+        maxlayer=max(r[2] for r in records)
+        pitches=sorted({r[1] for r in records})
+        full=[p for p in pitches if len({r[2] for r in records if r[1]==p})>=3]
+        if not full:raise AssertionError(f'{name}: no pitch has soft/medium/hard samples')
+        target=full[len(full)//2]
+        selected=[]
+        for velocity in (24,70,115):
+            goal=math.ceil(velocity/127*maxlayer)
+            choice=min(records,key=lambda r:(abs(r[1]-target),abs(r[2]-goal),str(r[0])))
+            info=sf.info(choice[0])
+            if choice[1]!=target or info.frames < .1*info.samplerate:
+                raise AssertionError(f'{name}: invalid recorded velocity probe at MIDI {target}')
+            selected.append(choice[2])
+        if len(set(selected))!=3:
+            raise AssertionError(f'{name}: soft/medium/hard did not select different recordings')
+        velocity_probes[name]={'midi_pitch':target,'layers_at_velocity_24_70_115':selected}
     used={}
     for style in SONGS:
         score=make(style)
@@ -53,7 +77,7 @@ def audit_assets(root: Path) -> dict:
                      'max_transpose_semitones':max(deltas,default=0),
                      'sample_layer_usage':dict(sorted(layers.items()))}
         if not sampled:raise AssertionError(f'No recorded notes in {style}')
-    return {'sources':sources,'scores':used,
+    return {'sources':sources,'velocity_probes':velocity_probes,'scores':used,
             'limitations':'Mapping and provenance checks, not an acoustic realism or listener preference score.'}
 
 
