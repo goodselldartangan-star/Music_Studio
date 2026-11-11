@@ -31,7 +31,7 @@ The new, **opt-in** `studio7/rhythm.py::shape_pocket` works exclusively on bass 
 - All five `tests/test_rhythm_pocket_p3.py` tests protect pickup timing, intro bass without kick, overlapping previous releases, deterministic results, and the existing score/harmony review.
 - [Focused clean GitHub P3 workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43119195729) passed **36 tests**, an isolated kick+GM-bass A/B with an unchanged drum stem, MP3 decoding, and an integrated After arrangement.
 - On the **After** score, 16 anchor notes shifted; median lag was **63.93 → 17.02 ms**. This proves the requested numeric change, not that the new pocket is better.
-- The P3 recorded-asset comparison is tracked in the current [full sample workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43119410960). Do not treat it as complete before its actual result.
+- The [full recorded-instrument build](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43119410960) **passed** its sample downloads, full baseline renders, P2 integrated renders, and an optional After P3 pocket render. The After P3 metadata confirmed the real sample backend, bass anchor changes and valid decoded MP3.
 
 ## Remaining P3 work
 
