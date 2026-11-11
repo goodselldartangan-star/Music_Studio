@@ -1,16 +1,6 @@
 name: Music Studio v3 — modular offline build
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'studio3/**'
-      - 'render.py'
-      - 'check.py'
-      - 'tests/**'
-      - 'requirements.txt'
-      - '.github/workflows/music-studio-v3.yml'
-  pull_request:
   workflow_dispatch:
 
 permissions:
