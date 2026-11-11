@@ -30,18 +30,22 @@ class SampleCoverage(unittest.TestCase):
                     source='meta-nylon-guitar' if style=='silver' and part=='acoustic' else (
                         'meta-steel-guitar' if part=='acoustic' else 'meta-piano')
                     sources.setdefault(source,set()).add(n['pitch'])
-            audio=np.zeros(320,dtype=np.float32)
+            audio=np.zeros(round(.20*44100),dtype=np.float32)
             for source,pitches in sources.items():
                 folder=root/source
                 folder.mkdir()
                 for pitch in pitches:
-                    path=folder/f'Instrument_Vel01Finger_{note_label(pitch)}_01.wav'
-                    sf.write(path,audio,44100)
+                    for layer in range(1,5):
+                        path=folder/f'Instrument_Vel0{layer}Finger_{note_label(pitch)}_01.wav'
+                        sf.write(path,audio,44100)
             report=audit_assets(root)
             self.assertEqual(set(report['scores']),set(SONGS))
             self.assertTrue(all(v['max_transpose_semitones']==0 for v in report['scores'].values()))
             self.assertTrue(all(v['exact_pitch_hits']==v['sampled_notes'] for v in report['scores'].values()))
             self.assertGreater(report['sources']['pluck']['recordings'],1)
+            self.assertEqual(len(report['velocity_probes']),3)
+            self.assertTrue(all(len(set(v['layers_at_velocity_24_70_115']))==3
+                                for v in report['velocity_probes'].values()))
 
 
 if __name__=='__main__':unittest.main()
