@@ -12,6 +12,7 @@ import soundfile as sf
 from studio3.spec import Note, SR, Settings
 from studio3.sample_bank import SampleBank, midi_from_name, _at_pitch
 from tools.install_cc0 import install_pack
+from tools.compare_previews import analyze
 
 
 class BankTests(unittest.TestCase):
@@ -81,6 +82,25 @@ class BankTests(unittest.TestCase):
         attack=self.root/'bad.zip'
         with ZipFile(attack,'w') as z:z.writestr('../bad.ogg',b'not a file')
         with self.assertRaises(ValueError):install_pack('meta-piano',attack,output)
+
+
+class ComparisonTests(unittest.TestCase):
+    def test_ab_matching_under_peak_ceiling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            sr=SR
+            t=np.arange(sr,dtype=np.float32)/sr
+            a=np.column_stack([.24*np.sin(2*np.pi*330*t),.24*np.sin(2*np.pi*330*t)])
+            b=np.column_stack([.13*np.sin(2*np.pi*440*t),.13*np.sin(2*np.pi*440*t)])
+            sf.write(root/'a.wav',a,sr)
+            sf.write(root/'b.wav',b,sr)
+            report=analyze(root/'a.wav',root/'b.wav',root/'ab.wav')
+            self.assertTrue(report['passed'])
+            both,_=sf.read(root/'ab.wav',always_2d=True)
+            left=both[:sr]; right=both[sr+int(.9*sr):]
+            db=20*math.log10(np.sqrt(np.mean(left**2))/np.sqrt(np.mean(right**2)))
+            self.assertLess(abs(db),.05)
+            self.assertLess(np.max(np.abs(both)),.95)
 
 
 if __name__=='__main__':unittest.main()

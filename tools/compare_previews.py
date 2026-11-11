@@ -32,15 +32,20 @@ def analyze(a, b, out):
     # Normalize segment RMS for listener comparison; preserve source originals.
     rms_a = float(np.sqrt(np.mean(x*x)))
     rms_b = float(np.sqrt(np.mean(y*y)))
-    a_gain = .32 / max(1e-9, rms_a)
-    b_gain = .32 / max(1e-9, rms_b)
-    x = x * min(a_gain, .90/max(1e-9,float(np.max(abs(x)))))
-    y = y * min(b_gain, .90/max(1e-9,float(np.max(abs(y)))))
+    peak_a = float(np.max(np.abs(x)))
+    peak_b = float(np.max(np.abs(y)))
+    # Choose one common RMS that fits BOTH excerpts below the peak ceiling.
+    # Normalizing independently then clipping can leave a misleading level gap.
+    target_rms = min(.18, .90 * rms_a / max(peak_a, 1e-9),
+                     .90 * rms_b / max(peak_b, 1e-9))
+    x = x * (target_rms / max(rms_a, 1e-9))
+    y = y * (target_rms / max(rms_b, 1e-9))
     gap = np.zeros((int(sr*.9), 2),dtype=np.float32)
     sf.write(out, np.concatenate([x,gap,y], axis=0),sr,subtype='PCM_24')
     report = {'passed': True, 'format': 'synth first, sampled second, 0.9 sec gap',
               'synth': ainfo, 'sampled':binfo,
               'difference_rms': round(difference,6),
+              'ab_common_rms_dbfs': round(20 * math.log10(max(target_rms, 1e-10)), 2),
               'limitation': 'Numbers only show differences, not which timbre listeners prefer.'}
     return report
 
