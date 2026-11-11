@@ -10,18 +10,17 @@ An original **melodic electronic / cinematic instrumental**, written as a determ
 - **Form:** intro (8 bars), verse (16), build (8), chorus (16), breakdown (8), final chorus (12), outro (4)
 - **Main motif:** A–C–D–F, answered by E–D–C–A, developed through several sections
 
-The [GitHub Actions audio build](.github/workflows/render-song.yml) renders and tests the complete song and provides MP3, 24-bit WAV, MIDI and machine-readable score artifacts. Download the artifact from the most recent successful **Render original song** workflow run.
+The [GitHub Actions audio build](.github/workflows/render-song.yml) renders and tests the complete song and provides MP3, 24-bit WAV, MIDI and machine-readable score artifacts. Download the permanent [Afterglow Atlas release](https://github.com/goodselldartangan-star/Music_Studio/releases/tag/afterglow-atlas-v1) (MP3, WAV, MIDI and score), or get the artifact from the latest successful **Render original song** workflow run.
 
 ## Rebuild locally
 
-1. Download and extract [the complete Python source archive](source/Music_Studio_Source.zip) in the repository root:
-   `unzip -o source/Music_Studio_Source.zip`
+1. Clone this repository. The [editable renderer](afterglow_atlas.py) and [audio tests](test_audio.py) are directly in the repository root. The [source ZIP](source/Music_Studio_Source.zip) contains an exact tested snapshot as well.
 2. Install `python -m pip install -r requirements.txt`.
 3. Render with `python afterglow_atlas.py --out output`.
 4. Run checks with `python test_audio.py`.
 5. Make the listening MP3 with `ffmpeg -y -i output/Afterglow_Atlas.wav -codec:a libmp3lame -b:a 320k output/Afterglow_Atlas.mp3`.
 
-The source archive includes `afterglow_atlas.py` and `test_audio.py`; source files are readable when extracted. Regeneration does not require GitHub Actions or any AI music generation subscription.
+The source archive includes matching `afterglow_atlas.py` and `test_audio.py` copies used by the successful GitHub Actions build. Regeneration does not require GitHub Actions or any AI music generation subscription.
 
 ## Quality checks
 
