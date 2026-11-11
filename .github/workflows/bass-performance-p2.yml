@@ -1,0 +1,53 @@
+name: P2 bass articulation — isolated performance and decode QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/bass_performance.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_bass_performance_p2.py'
+      - 'tools/compare_bass_p2.py'
+      - '.github/workflows/bass-performance-p2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bass-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline sample engine and decoding tools
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Regression tests (bass, strumming, note overlap, DSP)
+        run: |
+          python -m unittest tests.test_studio7 tests.test_articulation tests.test_playing_p2 tests.test_bass_performance_p2 -v
+      - name: Render equal-patch bass-only comparison
+        run: |
+          python -m tools.compare_bass_p2 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p2-bass-preview
+          ffmpeg -v error -xerror -i p2-bass-preview/P2_bass_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p2-bass-preview/P2_bass_after.mp3 -f null -
+      - name: Full integration with bass performance only
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style after --bass-performance --out p2-bass-integrated
+          test -f p2-bass-integrated/after-v7-p2-bass.mp3
+          test -f p2-bass-integrated/verification_v7.json
+      - name: Archive objective results (not a subjective quality review)
+        uses: actions/upload-artifact@v4
+        with:
+          name: P2-Bass-Technical-Comparison
+          path: |
+            p2-bass-preview/P2_bass_*.mp3
+            p2-bass-preview/P2_bass_report.json
+            p2-bass-integrated/verification_v7.json
+          retention-days: 90
