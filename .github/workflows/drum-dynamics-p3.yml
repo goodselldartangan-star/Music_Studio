@@ -1,0 +1,53 @@
+name: P3 drum dynamics — isolated kit and rhythm integration QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/drum_dynamics.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_drum_dynamics_p3.py'
+      - 'tools/compare_drums_p3.py'
+      - '.github/workflows/drum-dynamics-p3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kit-dynamics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline soundfont renderer
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Test drum dynamics and unchanged kick/bass pocket
+        run: |
+          python -m unittest tests.test_drum_dynamics_p3 tests.test_rhythm_audit_p3 tests.test_rhythm_pocket_p3 -v
+      - name: Matched drum-only A/B
+        run: |
+          python -m tools.compare_drums_p3 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p3-drum-preview
+          ffmpeg -v error -xerror -i p3-drum-preview/P3_drums_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p3-drum-preview/P3_drums_after.mp3 -f null -
+      - name: Render full selected style with both independent P3 options
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style after --rhythm-pocket --drum-dynamics --out p3-integrated
+          test -f p3-integrated/after-v7-p3-pocket-p3-drums.mp3
+          test -f p3-integrated/verification_v7.json
+      - name: Preserve objective comparisons
+        uses: actions/upload-artifact@v4
+        with:
+          name: P3-Drum-Dynamics-Engineering-Comparison
+          path: |
+            p3-drum-preview/P3_drums_*.mp3
+            p3-drum-preview/P3_drums_report.json
+            p3-integrated/verification_v7.json
+          retention-days: 90
