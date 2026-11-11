@@ -1,4 +1,4 @@
-name: Music Studio - Original Offline Song
+name: Music Studio v2 - test, synthesize and verify
 
 on:
   push:
@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  offline-tests:
-    name: Test composition without AI services
+  unit-tests:
+    name: Offline songwriting and DSP tests
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -19,31 +19,27 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install offline synthesizer dependencies
+      - name: Install offline requirements
         run: python -m pip install -r requirements.txt
-      - name: Verify ffmpeg tools
-        run: |
-          ffmpeg -version | head -1
-          ffprobe -version | head -1
-      - name: Run all offline unit tests
+      - name: Test existing and v2 composition tools
         run: python -m unittest discover -s tests -v
-      - name: Check prior example plan without contacting any AI
-        run: python music_studio.py validate-plan examples/the_last_ferry_bell.json
-      - name: Test score and MIDI before rendering audio
-        run: python offline_song.py --score-only --out output
-      - name: Never commit source reference tracks or rendered audio
+      - name: Check full score and MIDI without rendering audio
+        run: python studio_v2.py --score-only --out score_only
+      - name: Check alternative tempo/key controls
+        run: python studio_v2.py --score-only --bpm 103 --transpose -3 --seed 4321 --out alt_score
+      - name: Never check in audio reference files or generated tracks
         run: |
           if git ls-files | grep -E '\.(mp3|wav|flac|mid)$'; then
-            echo 'Song media and reference audio must not be committed.' >&2
+            echo 'Rendered music and private references must not be checked in' >&2
             exit 1
           fi
 
-  render-verify-publish:
-    name: Synthesize, verify, and publish original song
+  render-and-verify:
+    name: Produce v2 track and pass every audio quality gate
+    needs: unit-tests
     if: github.event_name != 'pull_request'
-    needs: offline-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:
@@ -51,35 +47,39 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install offline audio dependencies
+      - name: Install offline DSP requirements
         run: python -m pip install -r requirements.txt
-      - name: Render 3:31 original instrumental without AI APIs or samples
-        run: python offline_song.py --out output
-      - name: Strict WAV and MP3 audio quality and decode checks
-        run: python audio_quality.py output
-      - name: Upload passing song and score
+      - name: Preview test without external AI
+        run: |
+          python studio_v2.py --preview-bars 8 --out preview
+          python quality_v2.py preview --preview
+      - name: Render full instrumental locally
+        run: python studio_v2.py --out output_v2
+      - name: Gate release on full audio quality tests
+        run: python quality_v2.py output_v2
+      - name: Publish passing master as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Streetlight-Letters-Studio-Masters
+          name: Porchlight-Receiver-Studio-v2
           path: |
-            output/Streetlight_Letters.mp3
-            output/Streetlight_Letters.wav
-            output/Streetlight_Letters.mid
-            output/Streetlight_Letters.score.json
-            output/audio_quality.json
+            output_v2/Porchlight_Receiver.mp3
+            output_v2/Porchlight_Receiver.wav
+            output_v2/Porchlight_Receiver.mid
+            output_v2/Porchlight_Receiver.score.json
+            output_v2/quality_v2.json
           retention-days: 90
-      - name: Publish permanent release after quality check
+      - name: Publish separate v2 release after all tests
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view streetlight-letters-v1 >/dev/null 2>&1 || \
-            gh release create streetlight-letters-v1 \
-              --title 'Streetlight Letters - Original Instrumental' \
-              --notes 'Original 3:31 electronic/indie-pop instrumental synthesized entirely offline with Python. No other AI, model API, samples, credentials or user input. Verified MP3, 24-bit WAV, MIDI, score and objective QA report. Final aesthetic judgment belongs to the listener.'
-          gh release upload streetlight-letters-v1 \
-            output/Streetlight_Letters.mp3 \
-            output/Streetlight_Letters.wav \
-            output/Streetlight_Letters.mid \
-            output/Streetlight_Letters.score.json \
-            output/audio_quality.json --clobber
+          gh release view porchlight-receiver-v2 > /dev/null 2>&1 || \
+            gh release create porchlight-receiver-v2 \
+              --title 'Porchlight Receiver - Music Studio v2' \
+              --notes 'Original 3:09 offline instrumental with physical-model strings, expressive groove, controlled buses and FFmpeg true-peak/loudness QA. Only ChatGPT authored the composition and code; no outside AI, keys or samples. Tests are technical and do not replace critical listening.'
+          gh release upload porchlight-receiver-v2 \
+            output_v2/Porchlight_Receiver.mp3 \
+            output_v2/Porchlight_Receiver.wav \
+            output_v2/Porchlight_Receiver.mid \
+            output_v2/Porchlight_Receiver.score.json \
+            output_v2/quality_v2.json --clobber

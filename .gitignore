@@ -1,10 +1,15 @@
-# Do not commit song masters or reference recordings.
+output/
+output_v2/
+preview/
+preview_alt/
+score_only/
+alt_score/
+output_v2_preview/
+output_v2_alt/
 *.mp3
 *.wav
 *.flac
 *.mid
-output/
 __pycache__/
+*.pyc
 .pytest_cache/
-*.partial
-.env
