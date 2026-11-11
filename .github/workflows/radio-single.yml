@@ -23,6 +23,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r radio_single/requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libsndfile1
           ffmpeg -version | head -1
       - name: Preflight notes, instrumentation and mix interfaces
         working-directory: radio_single
@@ -49,6 +51,11 @@ jobs:
           python-version: '3.12'
       - name: Install offline dependencies
         run: pip install -r radio_single/requirements.txt
+      - name: Install FFmpeg for audio encoding and true peak checks
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libsndfile1
+          ffmpeg -version | head -1
       - name: Render and verify 3:18 stereo master
         working-directory: radio_single
         run: python render_radio.py --out output
