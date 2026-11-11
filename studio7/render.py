@@ -14,6 +14,7 @@ from studio6.soundfonts import FluidSynth,render_sf2
 from .articulation import render_polyphonic,render_meta_note
 from .samples import Collection
 from .playing import shape_strums
+from .bass_performance import shape_bass
 
 DRUM_MAP={'kick':36,'snare':38,'hat':42,'open_hat':46,'tom':45,'rim':37,'crash':49}
 GM_PROGRAM={'acoustic':25,'electric':27,'piano':0,'bass':33,'lead':26,'drums':0}
@@ -164,16 +165,20 @@ def process_stems(score:dict,raw:dict,with_effects=True)->tuple[np.ndarray,dict,
 
 
 def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
-           with_effects=True,guitar_performance=False):
+           with_effects=True,guitar_performance=False,bass_performance=False):
     score=make(style);validate(score)
     performance_report=None
     if guitar_performance:
         score,performance_report=shape_strums(score)
         validate(score)
+    bass_report=None
+    if bass_performance:
+        score,bass_report=shape_bass(score)
+        validate(score)
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     raw=instrument_stems(score,assets=assets,gm=gm)
     mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects)
-    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '')
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -183,7 +188,8 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
     meta={'title':score['title'],'style':style,'backend':'GM preview (fallback)' if gm else 'recorded instruments',
           'duration_seconds':score['duration'],'score_notes':len(score['notes']),
           'drum_hits':len(score['drums']), 'effects_enabled':with_effects,
-          'guitar_performance':performance_report,**diagnostics}
+          'guitar_performance':performance_report,
+          'bass_performance':bass_report,**diagnostics}
     (out/(stem+'.score.json')).write_text(json.dumps(score,indent=2))
     (out/(stem+'.metadata.json')).write_text(json.dumps(meta,indent=2))
     return mp3,meta
