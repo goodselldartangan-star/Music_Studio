@@ -1,0 +1,10 @@
+# Do not commit song masters or reference recordings.
+*.mp3
+*.wav
+*.flac
+*.mid
+output/
+__pycache__/
+.pytest_cache/
+*.partial
+.env
