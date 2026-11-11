@@ -11,6 +11,7 @@ import soundfile as sf
 from scipy.signal import resample_poly
 from studio3.sample_bank import NOTE_PATTERN,midi_from_name
 from studio3.spec import SR
+from .articulation import smooth_release
 
 class Collection:
     def __init__(self,root:Path,name:str):
@@ -32,13 +33,8 @@ class Collection:
         ix=int(hashlib.sha256(f'{seed}:{pitch}:{length}'.encode()).hexdigest()[:8],16)%len(candidates)
         path,base,_=candidates[ix]
         sample=_resampled(path,base,pitch)
-        duration=length*60/bpm;release=.14;frames=max(1,int((duration+release)*SR))
-        out=np.zeros(frames,np.float32)
-        n=min(len(sample),frames);out[:n]=sample[:n]
-        start=min(frames,round(duration*SR))
-        if start<frames:
-            t=np.arange(frames-start)/SR
-            out[start:]*=np.exp(-t/(release*.24))
+        duration=length*60/bpm
+        out=smooth_release(sample,duration,part='acoustic',sr=SR)
         return out*(.43*velocity/127)
 
 @lru_cache(maxsize=80)

@@ -1,0 +1,41 @@
+name: Note transitions v8 — focused audio regression
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/articulation.py'
+      - 'studio7/render.py'
+      - 'studio7/samples.py'
+      - 'tests/test_articulation.py'
+      - 'compare_note_endings.py'
+      - '.github/workflows/note-articulation-v8.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  note-lifecycle-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependency and local demonstration SoundFont
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+          python -m pip install -r requirements.txt
+          test -f /usr/share/sounds/sf2/TimGM6mb.sf2
+      - name: Run existing and new focused tests
+        run: python -m unittest tests.test_studio7 tests.test_articulation -v
+      - name: Render and verify old versus new sound without generative AI
+        run: python compare_note_endings.py
+      - name: Preserve passing A/B previews and QA measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-Studio-v8-Note-Transitions
+          path: |
+            articulation_previews/*.mp3
+            articulation_previews/report.json
+          retention-days: 90

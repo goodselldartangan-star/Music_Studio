@@ -11,6 +11,7 @@ import soundfile as sf
 from .score import make,validate,SONGS
 from .effects import highpass,lowpass,room_send,tap_delay,subtle_chorus,tremolo,sidechain_envelope,saturate,mono_below,SR
 from studio6.soundfonts import FluidSynth,render_sf2
+from .articulation import render_polyphonic,render_meta_note
 from .samples import Collection
 
 DRUM_MAP={'kick':36,'snare':38,'hat':42,'open_hat':46,'tom':45,'rim':37,'crash':49}
@@ -27,10 +28,11 @@ DB_TARGET={
 
 
 def _render_with_gm(path:Path,notes:list[dict],seconds:float,bpm:int,part:str):
-    fs=FluidSynth(path,gain=.33,drum=part=='drums')
+    if part!='drums':
+        return render_polyphonic(path,notes,seconds,bpm,part=part,program=GM_PROGRAM[part])
+    # Percussion groups such as open/closed hats deliberately retain drum choking.
+    fs=FluidSynth(path,gain=.33,drum=True)
     try:
-        if part!='drums':
-            assert fs.select(fs.synth,0,fs.id,0,GM_PROGRAM[part])==0
         evt=[{'at':n['beat']*60/bpm,'off':(n['beat']+n['length'])*60/bpm,
               'pitch':n['pitch'],'velocity':n['velocity']} for n in notes]
         return fs.render(evt,round(seconds*SR))
@@ -55,7 +57,7 @@ def _sample_meta(score:dict,part:str,assets:Path):
     frames=round(score['duration']*SR);dest=np.zeros((frames,2),dtype=np.float32)
     for i,n in enumerate(x for x in score['notes'] if x['instrument']==part):
         voice=Note(key,n['beat'],n['length'],n['pitch'],n['velocity']/127,0)
-        raw=bank.render_note(voice,score['bpm'],score['bars']*43+i)
+        raw=render_meta_note(bank,voice,score['bpm'],score['bars']*43+i)
         start=round(n['beat']*60/score['bpm']*SR)
         end=min(frames,start+len(raw))
         if end>start:
@@ -82,7 +84,7 @@ def instrument_stems(score:dict,assets:Path|None=None,gm:Path|None=None)->dict:
             out[name]=_sample_meta(score,name,assets)
         else:
             font=assets/'sf2'/('bass_picked.sf2' if name=='bass' and score['style']=='after' else f'{"electric" if name=="lead" else name}.sf2')
-            out[name]=render_sf2(font,active,dur,bpm)
+            out[name]=render_polyphonic(font,active,dur,bpm,part=name,program=0)
     hits=[{'beat':h['beat'],'length':.135,'pitch':DRUM_MAP[h['kind']],'velocity':h['velocity']} for h in score['drums']]
     if hits:
         out['drums']=_render_with_gm(gm,hits,dur,bpm,'drums') if gm else render_sf2(assets/'sf2/drums.sf2',hits,dur,bpm,drum=True)
