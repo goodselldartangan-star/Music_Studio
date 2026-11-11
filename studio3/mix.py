@@ -57,14 +57,17 @@ def oversampled_saturation(audio,drive=1.07):
     return resample_poly(wet,1,2,axis=0)[:len(audio)].astype(np.float32)
 
 
-def mix_score(score:dict,out:Path,sample_root:Path|None=None,require_samples:bool=False):
+def mix_score(score:dict,out:Path,sample_root:Path|None=None,require_samples:bool=False,require_drums:bool=False):
     frames=round(score['duration_seconds']*SR);bpm=score['bpm']
     from .sample_bank import SampleBank, SOURCE_FOR_PART
     bank=SampleBank(sample_root) if sample_root is not None else None
-    if bank and not any(bank.has(p) for p in SOURCE_FOR_PART):
-        raise FileNotFoundError('No playable piano or steel-guitar samples in sample-root')
+    if bank and not (any(bank.has(p) for p in SOURCE_FOR_PART) or
+                     any(bank.has(k) for k in ('kick','snare','hat','open_hat'))):
+        raise FileNotFoundError('No playable instruments or percussion in sample-root')
     if require_samples and (not bank or any(not bank.has(p) for p in SOURCE_FOR_PART)):
         raise FileNotFoundError('Required recorded steel guitar and piano are missing; install official CC0 sample packs')
+    if require_drums and (not bank or any(not bank.has(k) for k in ('kick','snare','hat','open_hat'))):
+        raise FileNotFoundError('Required recorded drum samples missing (kick, snare, hat, open_hat)')
     sampled_notes=0; sampled_drums=0
     buses={name:np.zeros((frames,2),np.float32) for name in GAIN}
     for n in score['notes']:
@@ -79,6 +82,15 @@ def mix_score(score:dict,out:Path,sample_root:Path|None=None,require_samples:boo
             sound=bank.render_drum(h['kind'],h['velocity'],i);sampled_drums+=1
         else:
             sound=drum_wave(h['kind'],i%7)*h['velocity']
+        if h['kind']=='open_hat':
+            next_hats=[n['beat'] for n in score['drums'] if n['kind']=='hat' and n['beat']>h['beat']]
+            if next_hats:
+                remaining=round((min(next_hats)-h['beat'])*60/bpm*SR)
+                if remaining<len(sound):
+                    remaining=max(0,remaining)
+                    fade=min(round(.008*SR),remaining)
+                    sound=sound[:remaining].copy()
+                    if fade>0:sound[-fade:]*=np.linspace(1,0,fade,dtype=np.float32)
         insert(buses['drums'],sound,h['beat'],h['pan'],bpm)
     # 120ms supporting-part duck; never duck the lead.
     duck=np.ones(frames,dtype=np.float32)
@@ -94,7 +106,9 @@ def mix_score(score:dict,out:Path,sample_root:Path|None=None,require_samples:boo
         conditioned=filter_bus(name,bus)
         if name=='lead':conditioned+=.21*stereo_echo(conditioned)+.14*reverb(conditioned)
         elif name=='keys':conditioned+=.11*stereo_echo(conditioned,.24,.38)
-        master+=conditioned*GAIN[name]
+        override=float(score.get('mix',{}).get('bus_gains',{}).get(name,1))
+        if not 0<=override<=2.0:raise ValueError('bus gain multiplier out of range')
+        master+=conditioned*GAIN[name]*override
         del conditioned
     del buses
     # Stereo width is an independent mix parameter, not baked into the sound engine.

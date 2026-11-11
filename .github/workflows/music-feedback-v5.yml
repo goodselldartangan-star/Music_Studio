@@ -1,0 +1,86 @@
+name: Music Studio v5 - recorded rhythm and three feedback examples
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio3/performance.py'
+      - 'studio3/sample_bank.py'
+      - 'studio3/mix.py'
+      - 'tools/install_cc0_drums.py'
+      - 'tools/render_feedback.py'
+      - 'tools/verify_demos.py'
+      - 'tests/test_feedback_v5.py'
+      - '.github/workflows/music-feedback-v5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audio-examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python libraries (no third-party AI)
+        run: python -m pip install -r requirements.txt
+      - name: Check audio encoders
+        run: ffmpeg -version | head -1
+      - name: Unit tests first
+        run: python -m unittest discover -s tests -v
+      - name: Download published CC0 guitar and piano instruments
+        run: |
+          mkdir -p /tmp/cc0-archives
+          gh release download meta-steel-guitar-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' \
+            --dir /tmp/cc0-archives
+          gh release download meta-piano-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-piano-ogg.zip' \
+            --dir /tmp/cc0-archives
+          python tools/install_cc0.py --no-download \
+            --guitar-zip /tmp/cc0-archives/meta-open-sound-meta-steel-guitar-ogg.zip \
+            --piano-zip /tmp/cc0-archives/meta-open-sound-meta-piano-ogg.zip \
+            --out assets/cc0-samples
+      - name: Install and authenticate CC0 drum one-shots
+        run: python tools/install_cc0_drums.py --out assets/cc0-samples
+      - name: Generate three independent sampled MP3 examples
+        run: |
+          python -m tools.render_feedback --sample-root assets/cc0-samples --require-drums \
+            --out feedback-examples
+      - name: Verify no clipping, proper decoding and actual sample use
+        run: python -m tools.verify_demos feedback-examples --require-samples
+      - name: Upload versioned test previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-Studio-v5-Three-Real-Instrument-Previews
+          path: |
+            feedback-examples/**/*.mp3
+            feedback-examples/**/*.mid
+            feedback-examples/**/*.score.json
+            feedback-examples/verification.json
+            feedback-examples/results.json
+            assets/cc0-samples/provenance.json
+            assets/cc0-samples/drum_provenance.json
+          retention-days: 90
+      - name: Publish sample-backed listening release after all tests pass
+        if: github.ref == 'refs/heads/main'
+        run: |
+          gh release view music-studio-feedback-v5 >/dev/null 2>&1 || \
+            gh release create music-studio-feedback-v5 \
+              --title 'Music Studio v5 — Three Instrumental Feedback Examples' \
+              --notes 'Three original 27-29 second examples: Indie, Electro and Hybrid. Offline GPT-authored composition + code, CC0 recorded guitar, piano and drums, objective engineering checks. Neither listener preference nor subjective sound quality is guaranteed.'
+          gh release upload music-studio-feedback-v5 \
+            feedback-examples/indie/Music_Studio_Example_Indie.mp3 \
+            feedback-examples/electro/Music_Studio_Example_Electro.mp3 \
+            feedback-examples/hybrid/Music_Studio_Example_Hybrid.mp3 \
+            feedback-examples/verification.json --clobber

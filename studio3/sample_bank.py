@@ -101,6 +101,8 @@ class SampleBank:
     def has(self, part: str) -> bool:
         if part in SOURCE_FOR_PART:
             return bool(self.regions[SOURCE_FOR_PART[part]])
+        if part == 'ghost':
+            return 'snare' in self.oneshots
         return part in self.oneshots
 
     def inventory(self) -> dict[str, int]:
@@ -145,7 +147,7 @@ class SampleBank:
         return out
 
     def render_drum(self, kind: str, velocity: float, event_key: int) -> np.ndarray:
-        variants = self.oneshots.get(kind)
+        variants = self.oneshots.get('snare' if kind == 'ghost' else kind)
         if not variants:
             raise FileNotFoundError(f'No recorded drum one-shot for {kind}')
         sample = variants[_seed_index(kind, event_key) % len(variants)]
@@ -157,4 +159,6 @@ class SampleBank:
         if len(y):
             fade = min(len(y), round(.014*SR))
             y[-fade:] *= np.linspace(1,0,fade,dtype=np.float32)
-        return y * (0.55 * velocity)
+        gain = {'kick':.74,'snare':.66,'ghost':.33,'hat':.51,'open_hat':.48,
+                'clap':.55,'shaker':.42,'tom':.54,'rim':.44}.get(kind,.55)
+        return y * (gain * velocity)
