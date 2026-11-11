@@ -1,0 +1,84 @@
+name: Music Studio - CC0 recorded instrument comparison
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio3/sample_bank.py'
+      - 'studio3/mix.py'
+      - 'render.py'
+      - 'tools/install_cc0.py'
+      - 'tools/compare_previews.py'
+      - 'tests/test_sample_bank.py'
+      - '.github/workflows/recorded-instrument-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sample-preview:
+    name: Download real instruments, render and A/B test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local DSP requirements
+        run: |
+          python -m pip install -r requirements.txt
+          ffmpeg -version | head -1
+      - name: Run independent module tests before downloading
+        run: python -m unittest discover -s tests -v
+      - name: Retrieve publisher's tagged CC0 OGG assets (no credentials or user step)
+        run: |
+          mkdir -p /tmp/cc0-zips
+          gh release download meta-steel-guitar-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' \
+            --dir /tmp/cc0-zips
+          gh release download meta-piano-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-piano-ogg.zip' \
+            --dir /tmp/cc0-zips
+          python tools/install_cc0.py --no-download \
+            --guitar-zip /tmp/cc0-zips/meta-open-sound-meta-steel-guitar-ogg.zip \
+            --piano-zip /tmp/cc0-zips/meta-open-sound-meta-piano-ogg.zip \
+            --out assets/cc0-samples
+      - name: Baseline (original synthetic) preview
+        run: python render.py --preview-bars 8 --out previews/synth
+      - name: New recorded-instrument preview, fail if samples not used
+        run: |
+          python render.py --preview-bars 8 \
+            --sample-root assets/cc0-samples --require-samples \
+            --out previews/sampled | tee previews/sampled_render.json
+          python -c "import json; d=json.load(open('previews/sampled_render.json')); assert d['sampled_notes']>10, d"
+      - name: Verify both renders independently
+        run: |
+          python check.py previews/synth --preview
+          python check.py previews/sampled --preview
+      - name: Produce level-controlled A/B sample
+        run: |
+          python tools/compare_previews.py \
+            previews/synth/Blue_Hour_Signal.wav \
+            previews/sampled/Blue_Hour_Signal.wav \
+            --out previews/AB_synth_then_samples.wav
+          ffmpeg -hide_banner -loglevel error -y \
+            -i previews/AB_synth_then_samples.wav -b:a 256k \
+            previews/AB_synth_then_samples.mp3
+      - name: Retain tested previews, logs and upstream checksums as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-Studio-Real-Instruments-AB
+          path: |
+            previews/synth/Blue_Hour_Signal.mp3
+            previews/sampled/Blue_Hour_Signal.mp3
+            previews/AB_synth_then_samples.mp3
+            previews/comparison.json
+            previews/sampled_render.json
+            assets/cc0-samples/provenance.json
+          retention-days: 30

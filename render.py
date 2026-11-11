@@ -20,6 +20,8 @@ def main():
     p.add_argument('--no-mp3',action='store_true')
     p.add_argument('--no-development', action='store_true', help='Render baseline v3 score for A/B testing')
     p.add_argument('--stereo-width',type=float,default=1.95)
+    p.add_argument('--sample-root',type=Path,help='Folder of downloaded CC0 recorded instruments (optional)')
+    p.add_argument('--require-samples',action='store_true',help='Fail if recorded guitar or piano is unavailable')
     args=p.parse_args()
     score=create_score(Settings(args.bpm,args.transpose,args.seed,args.preview_bars))
     if not args.no_development:
@@ -36,7 +38,7 @@ def main():
     result={'title':score['title'],'development':not args.no_development, 'score_warnings':review['warnings'], 'seconds':score['duration_seconds'],
             'notes':len(score['notes']),'drums':len(score['drums'])}
     if not args.score_only:
-        result.update(mix_score(score,args.out))
+        result.update(mix_score(score,args.out,sample_root=args.sample_root,require_samples=args.require_samples))
         if not args.no_mp3:
             target=args.out/(stem+'.mp3')
             subprocess.run(['ffmpeg','-hide_banner','-v','error','-nostdin','-y',

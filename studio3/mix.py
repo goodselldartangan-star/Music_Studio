@@ -57,14 +57,29 @@ def oversampled_saturation(audio,drive=1.07):
     return resample_poly(wet,1,2,axis=0)[:len(audio)].astype(np.float32)
 
 
-def mix_score(score:dict,out:Path):
+def mix_score(score:dict,out:Path,sample_root:Path|None=None,require_samples:bool=False):
     frames=round(score['duration_seconds']*SR);bpm=score['bpm']
+    from .sample_bank import SampleBank, SOURCE_FOR_PART
+    bank=SampleBank(sample_root) if sample_root is not None else None
+    if bank and not any(bank.has(p) for p in SOURCE_FOR_PART):
+        raise FileNotFoundError('No playable piano or steel-guitar samples in sample-root')
+    if require_samples and (not bank or any(not bank.has(p) for p in SOURCE_FOR_PART)):
+        raise FileNotFoundError('Required recorded steel guitar and piano are missing; install official CC0 sample packs')
+    sampled_notes=0; sampled_drums=0
     buses={name:np.zeros((frames,2),np.float32) for name in GAIN}
     for n in score['notes']:
         voice=Note(**n)
-        insert(buses[BUS[voice.part]],note_wave(voice,bpm,score['seed']),voice.beat,voice.pan,bpm)
+        if bank and bank.has(voice.part):
+            waveform=bank.render_note(voice,bpm,score['seed']);sampled_notes+=1
+        else:
+            waveform=note_wave(voice,bpm,score['seed'])
+        insert(buses[BUS[voice.part]],waveform,voice.beat,voice.pan,bpm)
     for i,h in enumerate(score['drums']):
-        insert(buses['drums'],drum_wave(h['kind'],i%7)*h['velocity'],h['beat'],h['pan'],bpm)
+        if bank and bank.has(h['kind']):
+            sound=bank.render_drum(h['kind'],h['velocity'],i);sampled_drums+=1
+        else:
+            sound=drum_wave(h['kind'],i%7)*h['velocity']
+        insert(buses['drums'],sound,h['beat'],h['pan'],bpm)
     # 120ms supporting-part duck; never duck the lead.
     duck=np.ones(frames,dtype=np.float32)
     for h in score['drums']:
@@ -112,4 +127,6 @@ def mix_score(score:dict,out:Path):
     master[-fadeout:]*=np.linspace(1,0,fadeout,dtype=np.float32)[:,None]**1.4
     path=out/(score['stem']+'.wav')
     sf.write(path,master,SR,subtype='PCM_24')
-    return {'wav':str(path),'sample_peak_dbfs':round(20*math.log10(max(np.max(np.abs(master)),1e-10)),2)}
+    return {'wav':str(path),'sample_peak_dbfs':round(20*math.log10(max(np.max(np.abs(master)),1e-10)),2),
+            'sampled_notes':sampled_notes,'sampled_drums':sampled_drums,
+            'sample_inventory':bank.inventory() if bank else {}}

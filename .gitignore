@@ -13,3 +13,8 @@ output_v2_alt/
 __pycache__/
 *.pyc
 .pytest_cache/
+assets/cc0-samples/
+.download-cache/
+previews/
+_test-samples/
+_preview-samples/
