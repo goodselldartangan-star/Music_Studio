@@ -8,7 +8,8 @@ from scipy.signal import butter,sosfilt
 from .score import make,STYLES
 from .soundfonts import render_sf2,SR
 
-# MuldjordKit SFZ uses its own chromatic map, not General MIDI.\nDRUM_PITCH={'kick':48,'snare':50,'hat':52,'open_hat':53,'tom':61,'rim':65,'crash':58}
+# MuldjordKit SFZ uses its own chromatic map, not General MIDI.
+DRUM_PITCH={'kick':48,'snare':50,'hat':52,'open_hat':53,'tom':61,'rim':65,'crash':58}
 
 
 def sample_meta(score,kind:str,root:Path):
