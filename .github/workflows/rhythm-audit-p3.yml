@@ -1,0 +1,33 @@
+name: P3 rhythm-section baseline — timing audit only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audit_rhythm_p3.py'
+      - 'tests/test_rhythm_audit_p3.py'
+      - '.github/workflows/rhythm-audit-p3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rhythm-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run score-only kick/bass, snare and hat measurements
+        run: |
+          python -m unittest tests.test_rhythm_audit_p3 -v
+          python -m tools.audit_rhythm_p3 --out p3_rhythm_baseline.json
+      - name: Save no-change baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: P3-Rhythm-Baseline-Timing-Report
+          path: p3_rhythm_baseline.json
+          retention-days: 90
