@@ -33,6 +33,10 @@ jobs:
         run: |
           python render.py --preview-bars 16 --score-only --out preview
           python review_score.py preview/Blue_Hour_Signal.score.json --strict
+      - name: Install FFmpeg for audio rendering and decoding
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libsndfile1
       - name: Decode and analyze 16-bar preview
         run: |
           python render.py --preview-bars 16 --out preview
