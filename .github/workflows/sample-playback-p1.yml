@@ -1,0 +1,37 @@
+name: Recorded-sample playback P1 — repeatable take QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/samples.py'
+      - 'tests/test_sample_take_identity.py'
+      - '.github/workflows/sample-playback-p1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sample-identity-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline DSP and local GM test fixtures
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3 timgm6mb-soundfont
+      - name: Check sample take identity and prior note lifecycle regressions
+        run: python -m unittest tests.test_sample_take_identity tests.test_studio7 tests.test_articulation -v
+      - name: No third-party audio downloads or AI credentials needed
+        run: |
+          python - <<'PY'
+          from studio7.samples import Collection
+          from studio7.articulation import assign_voice_channels
+          print('P1 sampler fixture and stable note contracts available')
+          PY
