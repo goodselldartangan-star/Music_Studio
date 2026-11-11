@@ -48,6 +48,12 @@ jobs:
         run: |
           command -v ffmpeg
           ffmpeg -version | head -1
+      - name: Install FFprobe for existing audio quality tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          command -v ffprobe
+          ffprobe -version | head -1
       - name: Unit tests first
         run: python -m unittest discover -s tests -v
       - name: Download published CC0 guitar and piano instruments
