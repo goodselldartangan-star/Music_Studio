@@ -22,7 +22,7 @@ jobs:
         run: |
           python -m pip install -r requirements.txt py7zr imageio-ffmpeg
           sudo apt-get update -qq
-          sudo apt-get install -y libfluidsynth3
+          sudo apt-get install -y libfluidsynth3 ffmpeg
           mkdir -p "$RUNNER_TEMP/bin"
           python - <<'PY'
           import imageio_ffmpeg, os
