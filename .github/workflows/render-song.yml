@@ -1,57 +1,58 @@
-name: Render original song
+name: Music Studio - gated tests
 
 on:
   push:
     branches: [main]
-    paths:
-      - "source/**"
-      - "requirements.txt"
-      - ".github/workflows/render-song.yml"
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  render-and-test:
-    name: Render WAV, MP3, MIDI and verify mix
+  offline-tests:
+    name: Validate songwriting plans, provider contract, and audio QA
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Install dependencies
+          python-version: '3.12'
+      - name: Verify required audio tools
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg libsndfile1
-      - name: Extract reviewed source
-        run: unzip -o source/Music_Studio_Source.zip
-      - name: Render original composition and MIDI
-        run: python afterglow_atlas.py --out output
-      - name: Run audio engineering tests
-        run: python test_audio.py
-      - name: Export listening master
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+      - name: Run deterministic offline tests (no provider credits)
+        run: python -m unittest discover -s tests -v
+      - name: Validate original example composition
+        run: python music_studio.py validate-plan examples/the_last_ferry_bell.json
+      - name: Validate music API request without submitting it
+        run: python music_studio.py render examples/the_last_ferry_bell.json --dry-run > /tmp/song-dry-run.json
+      - name: Keep recordings and private reference tracks out of source control
         run: |
-          ffmpeg -hide_banner -y -loglevel error -i output/Afterglow_Atlas.wav             -metadata title="Afterglow Atlas"             -metadata artist="Music Studio (original composition)"             -codec:a libmp3lame -b:a 320k output/Afterglow_Atlas.mp3
-          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output/Afterglow_Atlas.mp3
-      - name: Upload complete studio masters
-        uses: actions/upload-artifact@v4
-        with:
-          name: Afterglow-Atlas-Final-Song
-          path: |
-            output/Afterglow_Atlas.mp3
-            output/Afterglow_Atlas.wav
-            output/Afterglow_Atlas.mid
-            output/Afterglow_Atlas.score.json
-          retention-days: 90
-      - name: Publish versioned track release
-        if: github.ref == 'refs/heads/main'
+          if git ls-files | grep -E '\.(mp3|wav|flac|mid)$'; then
+            echo 'Error: a song or reference recording was checked in.' >&2
+            exit 1
+          fi
+
+  remove-old-song-assets:
+    name: Remove only old released song media
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Remove old audio and MIDI only; leave code, score, release intact
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          gh release view afterglow-atlas-v1 > /dev/null 2>&1 ||             gh release create afterglow-atlas-v1               --title "Afterglow Atlas — Original Instrumental"               --notes "Original 116 BPM cinematic electronic instrumental, rendered from the reproducible Music Studio source. 2:34 stereo 24-bit WAV, 320 kbps MP3, MIDI and score. Automated DSP checks passed; final aesthetic judgment is for listeners."
-          gh release upload afterglow-atlas-v1             output/Afterglow_Atlas.mp3             output/Afterglow_Atlas.wav             output/Afterglow_Atlas.mid             output/Afterglow_Atlas.score.json             --clobber
+          set -euo pipefail
+          for name in Afterglow_Atlas.mp3 Afterglow_Atlas.wav Afterglow_Atlas.mid; do
+            if gh release view afterglow-atlas-v1 --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+              gh release delete-asset afterglow-atlas-v1 "$name" --yes
+              echo "Removed released song asset: $name"
+            fi
+          done

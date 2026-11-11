@@ -1,0 +1,172 @@
+{
+  "title": "The Last Ferry Bell",
+  "profile": "indie_pop_rock",
+  "bpm": 112,
+  "chunks": [
+    {
+      "text": "[Intro]",
+      "duration_ms": 10000,
+      "positive_styles": [
+        "indie alternative pop-rock",
+        "rhythmic muted electric guitar and warm bass",
+        "organic live-feel drums",
+        "dynamic gritty expressive male lead vocals",
+        "strong memorable chorus hook",
+        "intimate conversational narrative lyrics",
+        "professional detailed studio production",
+        "close-miked muted guitar riff",
+        "warm bass hook",
+        "distant percussion",
+        "no vocals"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Verse 1]\nThe timetable curled in the rain\nUnder the glass at the harbor gate\nI carried the blue coat you left\nWith both of its pockets full of change\nThe ticket man swept up the sand\nAnd watched me trace the crossing by hand",
+      "duration_ms": 34000,
+      "positive_styles": [
+        "dry restrained kick and rimshot",
+        "intimate male vocal",
+        "chiming guitar answers"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Pre-Chorus]\nA light across the water blinked\nLike someone calling from a room\nThe engine started up again\nI knew what I had left to do",
+      "duration_ms": 16000,
+      "positive_styles": [
+        "growing bass movement",
+        "climbing vocal melody",
+        "drum fill"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Chorus]\nIf the last ferry bell can find me\nAcross a black and silver bay\nI'll set the old map on the table\nAnd finally tell you why I stayed\nThe shore is farther than it looks\nBut there's a light that knows the way",
+      "duration_ms": 32000,
+      "positive_styles": [
+        "driving live-sounding drums",
+        "wide rhythmic guitars",
+        "powerful melodic lead singing",
+        "hook repeats"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Verse 2]\nYou wrote a number on my sleeve\nIn case the ink should disappear\nI found it yesterday at dawn\nStill clear beneath the twenty years\nThe sea was smooth as station glass\nI watched the town become a line",
+      "duration_ms": 32000,
+      "positive_styles": [
+        "return to intimate storytelling",
+        "syncopated bass groove",
+        "dry guitar stabs"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Chorus]\nIf the last ferry bell can find me\nAcross a black and silver bay\nI'll set the old map on the table\nAnd finally tell you why I stayed\nThe shore is farther than it looks\nBut there's a light that knows the way",
+      "duration_ms": 32000,
+      "positive_styles": [
+        "full-band chorus",
+        "layered backing harmonies",
+        "open cymbals",
+        "confident emotional vocals"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Bridge]\nNo grand apology can turn\nA boat around against the wind\nI only know the things I missed\nAnd who I'd like to call a friend\nThe night clerk closed the window\nBut left the platform lights on dim",
+      "duration_ms": 25000,
+      "positive_styles": [
+        "strip back to bass and voice",
+        "quiet half-time drums",
+        "guitar swells",
+        "rising final phrase"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Final Chorus]\nIf the last ferry bell can find me\nAcross a black and silver bay\nI'll set the old map on the table\nAnd finally tell you I finally came\nThe shore is farther than it looks\nBut there's a light that leads the way",
+      "duration_ms": 32000,
+      "positive_styles": [
+        "climactic drums and guitar layers",
+        "big honest vocal",
+        "subtle upper harmony",
+        "clear final chorus hook"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Outro]\nThe blue coat on the railing\nA bell across the bay",
+      "duration_ms": 10000,
+      "positive_styles": [
+        "gentle final vocal",
+        "guitar motif reprise",
+        "controlled natural decay"
+      ],
+      "negative_styles": [
+        "robotic singing",
+        "unintelligible lyrics",
+        "generic EDM drop",
+        "overcompressed harsh master",
+        "soundalikes"
+      ],
+      "context_adherence": "high"
+    }
+  ]
+}
