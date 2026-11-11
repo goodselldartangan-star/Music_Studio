@@ -50,6 +50,9 @@ class CompositionTests(unittest.TestCase):
     def test_tempo_key_and_seed_are_real_controls(self):
         altered=v.song_plan(8,bpm=103,transpose=-3,seed=4321)
         base=v.song_plan(8)
+        # A full lower-key render exercises bass notes the intro-only preview lacks.
+        full_low=v.song_plan(bpm=103,transpose=-5,seed=4321)
+        self.assertGreaterEqual(min(n['pitch'] for n in full_low['notes']),24)
         self.assertEqual(altered['bpm'],103)
         self.assertEqual(altered['transpose'],-3)
         self.assertAlmostEqual(altered['duration_seconds'],8*4*60/103+v.TAIL)

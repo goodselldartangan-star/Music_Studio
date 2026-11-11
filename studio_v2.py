@@ -111,7 +111,7 @@ def song_plan(preview_bars=None, bpm=BPM, transpose=0, seed=SEED):
     def add(part, beat, length, pitch, vel, pan=0):
         if beat >= bars*4 or length <= 0: return
         pitch += transpose
-        assert 28 <= pitch <= 100 and 0 <= vel <= 1.3
+        assert 24 <= pitch <= 100 and 0 <= vel <= 1.3
         notes.append(Note(part, round(beat, 5), round(length, 4), int(pitch), round(vel, 4), pan))
 
     def hit(kind, beat, vel, pan=0):
