@@ -1,0 +1,109 @@
+name: Music Studio v7 — musical compatibility and effects demos
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/**'
+      - 'tests/test_studio7.py'
+      - 'tools/install_optional_v7.py'
+      - 'demo_v7.py'
+      - '.github/workflows/music-studio-v7.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  music-theory-and-dsp-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline dependencies, no AI access
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3 ffmpeg
+      - name: Score, registers, harmony, effects, MIDI and compatibility tests
+        run: python -m unittest discover -s tests -v
+      - name: Review every original score before generating paid or long audio
+        run: |
+          python - <<'PY'
+          from studio7.score import make, SONGS
+          from studio7.audit import review
+          for style in SONGS:
+              report=review(make(style))
+              print(style, report)
+              assert report['passed']
+          PY
+  recorded-instrument-demos:
+    needs: music-theory-and-dsp-tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local non-AI render and package tools
+        run: |
+          python -m pip install -r requirements.txt py7zr imageio-ffmpeg
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3 ffmpeg libsndfile1
+          ffprobe -version | head -1
+      - name: Download real guitars, piano, bass and kit from their original publishers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .v7-archives
+          gh release download meta-steel-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' --dir .v7-archives
+          gh release download meta-piano-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-piano-ogg.zip' --dir .v7-archives
+          gh release download meta-nylon-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-nylon-guitar-ogg.zip' --dir .v7-archives
+          gh release download 2026-08-07 --repo freepats/electric-guitar-FSBS-clean --pattern 'EGuitarFSBS-clean-bridge-small-SF2-20260807.7z' --dir .v7-archives
+          gh release download 2019-09-30 --repo freepats/electric-bass-YR --pattern 'FingerBassYR-SF2-20190930.7z' --dir .v7-archives
+          gh release download 2019-09-30 --repo freepats/electric-bass-YR --pattern 'PickedBassYR-SF2-20190930.7z' --dir .v7-archives
+          gh release download 2020-10-18 --repo freepats/muldjordkit --pattern 'MuldjordKit-SF2-20201018.7z' --dir .v7-archives
+      - name: Unpack provenance-tracked original sampled instruments
+        run: |
+          python tools/install_cc0.py --no-download --guitar-zip .v7-archives/meta-open-sound-meta-steel-guitar-ogg.zip --piano-zip .v7-archives/meta-open-sound-meta-piano-ogg.zip --out assets/v7
+          python tools/install_soundfonts.py --archives .v7-archives --out assets/v7
+          python tools/install_optional_v7.py --picked-bass .v7-archives/PickedBassYR-SF2-20190930.7z --nylon .v7-archives/meta-open-sound-meta-nylon-guitar-ogg.zip --out assets/v7
+      - name: Render three independent originals with selective effects
+        run: python demo_v7.py --assets assets/v7 --out v7-demos
+      - name: Verify decoded MP3 properties and real-sample backend
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          base=pathlib.Path('v7-demos')
+          report=json.loads((base/'verification_v7.json').read_text())
+          assert len(report)==3
+          for result in report:
+              assert result['metadata']['backend']=='recorded instruments'
+              assert result['audio_qa']['passed']
+              assert result['metadata']['effects_enabled']
+          assert (pathlib.Path('assets/v7')/'optional_v7_provenance.json').exists()
+          print('All three independently verified recorded-sample masters passed.')
+          PY
+      - name: Retain all three listening demos and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-Studio-v7-Instrument-and-Effects-Demos
+          path: |
+            v7-demos/*.mp3
+            v7-demos/*.score.json
+            v7-demos/*.metadata.json
+            v7-demos/verification_v7.json
+            assets/v7/*provenance*.json
+          retention-days: 90
+      - name: Publish new release without rewriting older recordings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view music-studio-v7-instrument-fit >/dev/null 2>&1 || \
+            gh release create music-studio-v7-instrument-fit \
+              --title 'Music Studio v7 — Instrument Compatibility and Effects' \
+              --notes 'Three new original ~35–41-second instrumental previews using actual CC0 recorded Meta Open Sound steel/nylon guitar and piano, FreePats finger/picked bass and clean electric guitar, and MuldjordKit acoustic drums (CC BY 4.0; recordings by DrumGizmo.org). Improvements: native bass range, compact guitar voicings, collision checks, staggered strumming, distinct instrument roles, tempo-synced delay, room sends, tremolo, chorus, kick-bass sidechain, low-frequency mono. Technical checks only; listener feedback is needed.'
+          gh release upload music-studio-v7-instrument-fit \
+              v7-demos/harbor-v7.mp3 v7-demos/after-v7.mp3 v7-demos/silver-v7.mp3 v7-demos/verification_v7.json --clobber
