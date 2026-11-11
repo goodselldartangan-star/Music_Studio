@@ -1,9 +1,6 @@
 name: Music Studio v2 - test, synthesize and verify
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
