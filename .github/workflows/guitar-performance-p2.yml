@@ -1,0 +1,54 @@
+name: P2 guitar performance — isolated articulation and audio QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/playing.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_playing_p2.py'
+      - 'tests/test_articulation.py'
+      - 'tools/compare_guitar_p2.py'
+      - '.github/workflows/guitar-performance-p2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guitar-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline test soundbank and audio tools
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+          test -f /usr/share/sounds/sf2/TimGM6mb.sf2
+      - name: Regression tests for simultaneous notes and P2 guitar technique
+        run: python -m unittest tests.test_studio7 tests.test_articulation tests.test_playing_p2 -v
+      - name: Render isolated level-matched guitar A/B
+        run: |
+          python -m tools.compare_guitar_p2 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p2-guitar-preview
+          ffmpeg -v error -xerror -i p2-guitar-preview/P2_guitar_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p2-guitar-preview/P2_guitar_after.mp3 -f null -
+      - name: Full arrangement regression with guitar performance enabled
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style harbor --guitar-performance --out p2-integrated
+          test -f p2-integrated/harbor-v7-p2-guitar.mp3
+          test -f p2-integrated/verification_v7.json
+      - name: Preserve diagnostic samples and objective reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: P2-Guitar-Performance-Technical-AB
+          path: |
+            p2-guitar-preview/*.mp3
+            p2-guitar-preview/P2_guitar_report.json
+            p2-integrated/verification_v7.json
+          retention-days: 90
