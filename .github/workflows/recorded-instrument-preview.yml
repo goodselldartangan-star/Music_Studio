@@ -28,13 +28,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install local DSP requirements
-        run: |
-          python -m pip install -r requirements.txt
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg libsndfile1
-          command -v ffmpeg
-          command -v ffprobe
+      - name: Install local DSP requirements (no system packages)
+        run: python -m pip install -r requirements.txt
       - name: Run independent module tests before downloading
         run: python -m unittest discover -s tests -v
       - name: Retrieve publisher's tagged CC0 OGG assets (no credentials or user step)
@@ -53,34 +48,39 @@ jobs:
             --piano-zip /tmp/cc0-zips/meta-open-sound-meta-piano-ogg.zip \
             --out assets/cc0-samples
       - name: Baseline (original synthetic) preview
-        run: python render.py --preview-bars 8 --out previews/synth
+        run: python render.py --preview-bars 8 --no-mp3 --out previews/synth
       - name: New recorded-instrument preview, fail if samples not used
         run: |
-          python render.py --preview-bars 8 \
+          python render.py --preview-bars 8 --no-mp3 \
             --sample-root assets/cc0-samples --require-samples \
             --out previews/sampled | tee previews/sampled_render.json
           python -c "import json; d=json.load(open('previews/sampled_render.json')); assert d['sampled_notes']>10, d"
-      - name: Verify both renders independently
+      - name: Verify both WAV renders independently
         run: |
-          python check.py previews/synth --preview
-          python check.py previews/sampled --preview
+          python - <<'PY2'
+          from pathlib import Path
+          import numpy as np, soundfile as sf
+          for kind in ('synth','sampled'):
+              filename=Path('previews')/kind/'Blue_Hour_Signal.wav'
+              x,sr=sf.read(filename,dtype='float32',always_2d=True)
+              assert sr==44100 and x.shape[1]==2 and np.isfinite(x).all()
+              assert 18<len(x)/sr<21, filename
+              assert 0.001<np.max(np.abs(x))<0.98, filename
+          PY2
       - name: Produce level-controlled A/B sample
         run: |
           python tools/compare_previews.py \
             previews/synth/Blue_Hour_Signal.wav \
             previews/sampled/Blue_Hour_Signal.wav \
             --out previews/AB_synth_then_samples.wav
-          ffmpeg -hide_banner -loglevel error -y \
-            -i previews/AB_synth_then_samples.wav -b:a 256k \
-            previews/AB_synth_then_samples.mp3
       - name: Retain tested previews, logs and upstream checksums as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Music-Studio-Real-Instruments-AB
           path: |
-            previews/synth/Blue_Hour_Signal.mp3
-            previews/sampled/Blue_Hour_Signal.mp3
-            previews/AB_synth_then_samples.mp3
+            previews/synth/Blue_Hour_Signal.wav
+            previews/sampled/Blue_Hour_Signal.wav
+            previews/AB_synth_then_samples.wav
             previews/comparison.json
             previews/sampled_render.json
             assets/cc0-samples/provenance.json

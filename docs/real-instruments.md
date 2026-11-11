@@ -18,15 +18,15 @@ The WAV masters are hundreds of MB and unnecessary for initial tests; these OGGs
 
 ### Automatic installation (GitHub Actions)
 
-On a change to the sampler, `.github/workflows/recorded-instrument-preview.yml` obtains the two OGG release files using `gh release download` on GitHub's runner, verifies the ZIP structure and runs a strict sampled-vs-synth A/B preview test. No personal account, API key or user download is needed. It stores the resulting MP3s and comparisons as temporary workflow artifacts, not repository files. The default song renderer is not replaced until the first real-sample A/B build passes.
+On a change to the sampler, `.github/workflows/recorded-instrument-preview.yml` obtains the two OGG release files using `gh release download` on GitHub's runner, verifies the ZIP structure and runs a strict sampled-vs-synth A/B preview test. No personal account, API key or user download is needed. It stores the resulting WAV previews and comparisons as temporary workflow artifacts, not repository files. The default song renderer is not replaced until the first real-sample A/B build passes.
 
 ### Install locally
 
 ```bash
 python tools/install_cc0.py --out assets/cc0-samples
 python -m unittest discover -s tests -v
-python render.py --preview-bars 8 --sample-root assets/cc0-samples --require-samples --out previews/sampled
-python check.py previews/sampled --preview
+python render.py --preview-bars 8 --sample-root assets/cc0-samples --require-samples --no-mp3 --out previews/sampled
+python tools/compare_previews.py previews/synth/Blue_Hour_Signal.wav previews/sampled/Blue_Hour_Signal.wav --out previews/AB.wav
 ```
 
 If local download access is blocked, use the two direct publisher links above, then:
