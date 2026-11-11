@@ -1,0 +1,80 @@
+name: Headlights on the Water - offline instrumental
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'radio_single/**'
+      - '.github/workflows/radio-single.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install -r radio_single/requirements.txt
+          ffmpeg -version | head -1
+      - name: Preflight notes, instrumentation and mix interfaces
+        working-directory: radio_single
+        run: |
+          python -m unittest discover -s tests -v
+          python render_radio.py --score-only --out score_only
+      - name: Keep recordings out of source control
+        run: |
+          if git ls-files | grep -E '\.(mp3|wav|flac|mid)$'; then
+            echo 'Audio is a build artifact, not a source input' >&2
+            exit 1
+          fi
+
+  render-and-release:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline dependencies
+        run: pip install -r radio_single/requirements.txt
+      - name: Render and verify 3:18 stereo master
+        working-directory: radio_single
+        run: python render_radio.py --out output
+      - name: Upload passing MP3, WAV, MIDI, score, QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Headlights-on-the-Water-Masters
+          retention-days: 90
+          path: |
+            radio_single/output/Headlights_on_the_Water.mp3
+            radio_single/output/Headlights_on_the_Water.wav
+            radio_single/output/Headlights_on_the_Water.mid
+            radio_single/output/Headlights_on_the_Water.score.json
+            radio_single/output/quality_report.json
+      - name: Publish an accessible permanent download
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view headlights-on-the-water-v1 >/dev/null 2>&1 || \
+          gh release create headlights-on-the-water-v1 \
+            --title 'Headlights on the Water — Instrumental Radio-Pop' \
+            --notes 'Original instrumental pop single, built entirely offline. 118 BPM, 3:18. Tested MP3, WAV, MIDI, score and engineering QA; subjective musical preference is not measured.'
+          gh release upload headlights-on-the-water-v1 \
+            radio_single/output/Headlights_on_the_Water.mp3 \
+            radio_single/output/Headlights_on_the_Water.wav \
+            radio_single/output/Headlights_on_the_Water.mid \
+            radio_single/output/Headlights_on_the_Water.score.json \
+            radio_single/output/quality_report.json --clobber
