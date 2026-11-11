@@ -73,7 +73,7 @@ jobs:
           python tools/install_soundfonts.py --archives .v7-archives --out assets/v7
           python tools/install_optional_v7.py --picked-bass .v7-archives/PickedBassYR-SF2-20190930.7z --nylon .v7-archives/meta-open-sound-meta-nylon-guitar-ogg.zip --out assets/v7
       - name: Audit actual recorded sample pitches and velocity layers
-        run: python tools/audit_sample_coverage.py --assets assets/v7 --out v7-demos/sample_coverage_p1.json
+        run: python -m tools.audit_sample_coverage --assets assets/v7 --out v7-demos/sample_coverage_p1.json
       - name: Render three independent originals with selective effects
         run: python demo_v7.py --assets assets/v7 --out v7-demos
       - name: Verify decoded MP3 properties and real-sample backend
