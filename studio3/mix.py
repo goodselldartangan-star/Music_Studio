@@ -82,10 +82,14 @@ def mix_score(score:dict,out:Path):
         master+=conditioned*GAIN[name]
         del conditioned
     del buses
+    # Stereo width is an independent mix parameter, not baked into the sound engine.
+    width=float(score.get('mix',{}).get('stereo_width',1.95))
+    if not .75<=width<=3.10:
+        raise ValueError('stereo_width must be in [0.75, 3.10]')
     # Low frequency mono and stereo above 145 Hz only.
     mid=(master[:,0]+master[:,1])*.5;side=(master[:,0]-master[:,1])*.5
     side=sosfilt(butter(2,145,fs=SR,btype='highpass',output='sos'),side).astype(np.float32)
-    master[:,0]=mid+side*2.9;master[:,1]=mid-side*2.9
+    master[:,0]=mid+side*width;master[:,1]=mid-side*width
     master=sosfilt(butter(2,29,fs=SR,btype='highpass',output='sos'),master,axis=0).astype(np.float32)
     # Musical macro-automation with smoothed edges, not global brickwall compression.
     shape=np.ones(frames,dtype=np.float32)

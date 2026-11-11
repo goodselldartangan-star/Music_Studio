@@ -1,0 +1,54 @@
+name: Music Studio v4 — modular score-to-audio QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio3/**'
+      - 'render.py'
+      - 'review_score.py'
+      - 'check.py'
+      - 'tests/**'
+      - 'requirements.txt'
+      - '.github/workflows/music-studio-v4.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - name: Offline tests (no other AI services)
+        run: python -m unittest discover -s tests -v
+      - name: Symbolic score gate
+        run: |
+          python render.py --preview-bars 16 --score-only --out preview
+          python review_score.py preview/Blue_Hour_Signal.score.json --strict
+      - name: Decode and analyze 16-bar preview
+        run: |
+          python render.py --preview-bars 16 --out preview
+          python check.py preview --preview
+      - name: No reference tracks or renders in source control
+        run: |
+          if git ls-files | grep -E '\.(mp3|wav|flac|mid)$'; then
+            echo 'Do not check rendered or reference audio into source control.' >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v4-verified-preview
+          path: |
+            preview/Blue_Hour_Signal.mp3
+            preview/Blue_Hour_Signal.score.json
+            preview/composition_review.json
+            preview/qa_report.json
+          retention-days: 30

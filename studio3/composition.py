@@ -5,20 +5,20 @@ from .spec import Settings, Note, Drum, SECTIONS, BARS, SR, STEM, TITLE, TAIL_SE
 
 # Voicings selected to keep the inner voices moving smoothly.
 CHORDS = {
-    'Bm9': ((59,62,66,69,73),35), 'Gmaj7': ((55,59,62,66,69),31),
-    'Dadd9': ((57,62,64,66,69),38), 'A6sus': ((57,61,64,66,71),33),
-    'Em9': ((52,59,62,66,67),40), 'F#7sus': ((54,59,61,64,70),30),
+    'Bm9': ((59,62,66,69,73),35), 'Gmaj9': ((55,59,62,66,69),31),
+    'Dadd9': ((57,62,64,66,69),38), 'A6/9': ((57,61,64,66,71),33),
+    'Em9': ((52,59,62,66,67),40), 'F#7sus4': ((54,59,61,64,66),30),
 }
 PROGRESSIONS = {
-    'intro': ('Bm9','Gmaj7','Dadd9','A6sus'),
-    'verse_a': ('Bm9','Gmaj7','Dadd9','A6sus'),
-    'rise': ('Em9','Gmaj7','A6sus','F#7sus'),
-    'chorus_a': ('Gmaj7','Dadd9','A6sus','Bm9'),
-    'instrumental': ('Bm9','Em9','Gmaj7','A6sus'),
-    'verse_b': ('Bm9','Gmaj7','Dadd9','A6sus'),
-    'bridge': ('Em9','Bm9','Gmaj7','F#7sus'),
-    'chorus_b': ('Gmaj7','Dadd9','A6sus','Bm9'),
-    'outro': ('Em9','Gmaj7','F#7sus','Bm9'),
+    'intro': ('Bm9','Gmaj9','Dadd9','A6/9'),
+    'verse_a': ('Bm9','Gmaj9','Dadd9','A6/9'),
+    'rise': ('Em9','Gmaj9','A6/9','F#7sus4'),
+    'chorus_a': ('Gmaj9','Dadd9','A6/9','Bm9'),
+    'instrumental': ('Bm9','Em9','Gmaj9','A6/9'),
+    'verse_b': ('Bm9','Gmaj9','Dadd9','A6/9'),
+    'bridge': ('Em9','Bm9','Gmaj9','F#7sus4'),
+    'chorus_b': ('Gmaj9','Dadd9','A6/9','Bm9'),
+    'outro': ('Em9','Gmaj9','F#7sus4','Bm9'),
 }
 # A memorable, singable instrumental chorus; phrasing leaves space for breath.
 HOOK = [

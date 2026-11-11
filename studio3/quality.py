@@ -8,6 +8,8 @@ import soundfile as sf
 import mido
 from scipy.signal import welch
 from .spec import STEM,SR,BARS
+from .review import audit_score
+from .composition import CHORDS
 
 
 def _loudness(path):
@@ -27,6 +29,7 @@ def _loudness(path):
 
 def validate(out:Path,full=True):
     score=json.loads((out/(STEM+'.score.json')).read_text())
+    symbolic = audit_score(score,CHORDS,strict=bool(score.get('development')))
     wav=out/(STEM+'.wav');mp3=out/(STEM+'.mp3');midi=out/(STEM+'.mid')
     for f in (wav,mp3,midi):assert f.is_file() and f.stat().st_size>0,f'Missing {f}'
     if full:assert score['bars']==BARS
@@ -92,4 +95,5 @@ def validate(out:Path,full=True):
             'stereo_correlation_first_28s':round(float(corr),3),
             'low_35_150':round(low,4),'high_3000_10000':round(high,4),
             'section_rms_dbfs':levels,'loudness':loud,
+            'composition_review':symbolic,
             'limits':'Objective QC only. Does not establish subjective musical quality.'}
