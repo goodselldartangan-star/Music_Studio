@@ -2,7 +2,7 @@ import unittest,tempfile,shutil
 from pathlib import Path
 from studio6.score import make,STYLES
 from studio6.soundfonts import render_sf2
-from studio6.qa import inspect
+from studio6.qa import inspect\nfrom studio6.render import DRUM_PITCH
 import numpy as np
 import soundfile as sf
 
@@ -21,7 +21,7 @@ class CompositionChecks(unittest.TestCase):
    s=make(x)
    self.assertTrue(any(n['instrument']=='bass' for n in s['notes']))
    self.assertTrue(any(h['kind']=='kick' for h in s['drums']))
- def test_bad_style(self):
+ def test_recorded_drum_kit_mapping(self):\n  self.assertEqual((DRUM_PITCH['kick'],DRUM_PITCH['snare'],DRUM_PITCH['hat'],DRUM_PITCH['open_hat']),(48,50,52,53))\n def test_bad_style(self):
   with self.assertRaises(ValueError):make('random')
 
 class SoundFontChecks(unittest.TestCase):
