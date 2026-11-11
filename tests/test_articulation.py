@@ -39,8 +39,34 @@ class ArticulationTests(unittest.TestCase):
                {'beat':1.0,'length':1.5,'pitch':64,'velocity':93}]
         events=assign_voice_channels(planned_events(notes,120,part='electric'))
         self.assertNotEqual(events[0]['channel'],events[1]['channel'])
+    def test_large_polyphonic_chord_uses_shared_channel(self):
+        # 40 distinct simultaneous pitches must not waste all 15 melodic channels.
+        notes=[{'at':0.,'off':1.,'pitch':40+i,'velocity':70} for i in range(40)]
+        events=assign_voice_channels(notes)
+        self.assertEqual(len(events),40)
+        self.assertEqual({e['channel'] for e in events},{0})
+    def test_polyphonic_chord_retrigger_uses_only_needed_channels(self):
+        notes=[{'at':0.,'off':1.,'pitch':60+i,'velocity':80} for i in range(5)]
+        notes += [{'at':.5,'off':1.5,'pitch':60+i,'velocity':80} for i in range(5)]
+        events=assign_voice_channels(notes,release_guard_s=.2)
+        self.assertEqual({x['channel'] for x in events[:5]},{0})
+        self.assertEqual({x['channel'] for x in events[5:]},{1})
+    def test_retrigger_guard_and_channel_reuse(self):
+        notes=[{'at':0.,'off':.4,'pitch':64,'velocity':80},
+               {'at':.65,'off':.9,'pitch':64,'velocity':85},
+               {'at':.7,'off':1.0,'pitch':64,'velocity':95},
+               {'at':1.1,'off':1.3,'pitch':64,'velocity':60}]
+        channels=[e['channel'] for e in assign_voice_channels(notes,release_guard_s=.2)]
+        self.assertEqual(channels,[0,0,1,0])
+    def test_dense_real_soundfont_piano_chord(self):
+        if not FONT.is_file():self.skipTest('No local GM soundfont')
+        notes=[{'beat':0.,'length':2.,'pitch':50+i,'velocity':72} for i in range(20)]
+        y=render_polyphonic(FONT,notes,2.0,120,part='piano',program=0)
+        self.assertEqual(y.shape,(2*SR,2))
+        self.assertTrue(np.isfinite(y).all())
+        self.assertGreater(float(np.max(np.abs(y))),1e-3)
     def test_overcapacity_raises_instead_of_silent_steal(self):
-        notes=[{'at':0.,'off':2.,'pitch':60+i,'velocity':80} for i in range(16)]
+        notes=[{'at':0.,'off':2.,'pitch':60,'velocity':80} for i in range(16)]
         with self.assertRaisesRegex(ValueError,'simultaneous'):
             assign_voice_channels(notes)
     def test_soundfont_overlapping_retrigger_is_audio_distinct(self):
