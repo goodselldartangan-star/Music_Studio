@@ -16,12 +16,14 @@ def main():
     p.add_argument('--bass-performance',action='store_true',help='P2 optional bass articulation')
     p.add_argument('--piano-performance',action='store_true',help='P2 optional piano touch and rolled chords')
     p.add_argument('--rhythm-pocket',action='store_true',help='P3 optional kick/bass pocket')
+    p.add_argument('--drum-dynamics',action='store_true',help='P3 optional existing-hit dynamic accents')
     a=p.parse_args();results=[]
     for style in ([a.style] if a.style else SONGS):
         mp3,meta=render(style,a.out,assets=a.assets,gm=a.gm,guitar_performance=a.guitar_performance,
                         bass_performance=a.bass_performance,
                         piano_performance=a.piano_performance,
-                        rhythm_pocket=a.rhythm_pocket)
+                        rhythm_pocket=a.rhythm_pocket,
+                        drum_dynamics=a.drum_dynamics)
         report=inspect(mp3)
         results.append({'metadata':meta,'audio_qa':report})
     (a.out/'verification_v7.json').write_text(json.dumps(results,indent=2))
