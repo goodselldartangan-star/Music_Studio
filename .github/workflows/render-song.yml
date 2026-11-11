@@ -1,4 +1,4 @@
-name: Music Studio - gated tests
+name: Music Studio - Original Offline Song
 
 on:
   push:
@@ -11,48 +11,75 @@ permissions:
 
 jobs:
   offline-tests:
-    name: Validate songwriting plans, provider contract, and audio QA
+    name: Test composition without AI services
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify required audio tools
+      - name: Install offline synthesizer dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Verify ffmpeg tools
         run: |
           ffmpeg -version | head -1
           ffprobe -version | head -1
-      - name: Run deterministic offline tests (no provider credits)
+      - name: Run all offline unit tests
         run: python -m unittest discover -s tests -v
-      - name: Validate original example composition
+      - name: Check prior example plan without contacting any AI
         run: python music_studio.py validate-plan examples/the_last_ferry_bell.json
-      - name: Validate music API request without submitting it
-        run: python music_studio.py render examples/the_last_ferry_bell.json --dry-run > /tmp/song-dry-run.json
-      - name: Keep recordings and private reference tracks out of source control
+      - name: Test score and MIDI before rendering audio
+        run: python offline_song.py --score-only --out output
+      - name: Never commit source reference tracks or rendered audio
         run: |
           if git ls-files | grep -E '\.(mp3|wav|flac|mid)$'; then
-            echo 'Error: a song or reference recording was checked in.' >&2
+            echo 'Song media and reference audio must not be committed.' >&2
             exit 1
           fi
 
-  remove-old-song-assets:
-    name: Remove only old released song media
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  render-verify-publish:
+    name: Synthesize, verify, and publish original song
+    if: github.event_name != 'pull_request'
     needs: offline-tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - name: Remove old audio and MIDI only; leave code, score, release intact
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline audio dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Render 3:31 original instrumental without AI APIs or samples
+        run: python offline_song.py --out output
+      - name: Strict WAV and MP3 audio quality and decode checks
+        run: python audio_quality.py output
+      - name: Upload passing song and score
+        uses: actions/upload-artifact@v4
+        with:
+          name: Streetlight-Letters-Studio-Masters
+          path: |
+            output/Streetlight_Letters.mp3
+            output/Streetlight_Letters.wav
+            output/Streetlight_Letters.mid
+            output/Streetlight_Letters.score.json
+            output/audio_quality.json
+          retention-days: 90
+      - name: Publish permanent release after quality check
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          for name in Afterglow_Atlas.mp3 Afterglow_Atlas.wav Afterglow_Atlas.mid; do
-            if gh release view afterglow-atlas-v1 --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
-              gh release delete-asset afterglow-atlas-v1 "$name" --yes
-              echo "Removed released song asset: $name"
-            fi
-          done
+          gh release view streetlight-letters-v1 >/dev/null 2>&1 || \
+            gh release create streetlight-letters-v1 \
+              --title 'Streetlight Letters - Original Instrumental' \
+              --notes 'Original 3:31 electronic/indie-pop instrumental synthesized entirely offline with Python. No other AI, model API, samples, credentials or user input. Verified MP3, 24-bit WAV, MIDI, score and objective QA report. Final aesthetic judgment belongs to the listener.'
+          gh release upload streetlight-letters-v1 \
+            output/Streetlight_Letters.mp3 \
+            output/Streetlight_Letters.wav \
+            output/Streetlight_Letters.mid \
+            output/Streetlight_Letters.score.json \
+            output/audio_quality.json --clobber
