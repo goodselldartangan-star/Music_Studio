@@ -1,0 +1,53 @@
+name: P8 arrangement architecture — section density and transition QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/sections.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_sections_p8.py'
+      - 'tools/compare_sections_p8.py'
+      - '.github/workflows/sections-p8.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  section-transition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline GM bank and sound tools
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Test four-section counts, original notes and phrase tail preservation
+        run: |
+          python -m unittest tests.test_sections_p8 tests.test_studio7 tests.test_melody_p5 -v
+      - name: Render isolated before/after last-section breath
+        run: |
+          python -m tools.compare_sections_p8 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p8-transition-preview
+          ffmpeg -v error -xerror -i p8-transition-preview/P8_transition_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p8-transition-preview/P8_transition_after.mp3 -f null -
+      - name: Check full optional arrangement output without altering the old default
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style after --transition-breath --out p8-integrated
+          test -f p8-integrated/after-v7-p8-breath.mp3
+          test -f p8-integrated/verification_v7.json
+      - name: Save measured structure and audio-only technical differences
+        uses: actions/upload-artifact@v4
+        with:
+          name: P8-Transition-Technical-AB
+          path: |
+            p8-transition-preview/P8_transition_*.mp3
+            p8-transition-preview/P8_transition_report.json
+            p8-integrated/verification_v7.json
+          retention-days: 90
