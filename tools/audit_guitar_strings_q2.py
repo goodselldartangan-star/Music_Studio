@@ -12,6 +12,7 @@ from studio3.sample_bank import SampleBank
 from studio3.spec import Note
 from studio7.samples import Collection
 from studio7.score import make
+from studio7.string_mapping import plan_guitar_samples
 
 STRING_ORDER = ("LowE", "A", "D", "G", "B", "HighE")
 STRING_PATTERN = re.compile(r"_String(LowE|A|D|G|B|HighE)_", re.I)
@@ -71,7 +72,12 @@ def audit_score(score:dict,assets:Path)->dict:
                         "pitches":[n["pitch"] for _,n in group],
                         "source_strings":string_choices,
                         "same_string_collisions":collisions})
+    # Compare the original independent per-note choices against an entirely
+    # opt-in, string-aware candidate on the very same score and source files.
+    source_regions=nylon.regions if nylon is not None else bank.regions["meta-steel-guitar"]
+    _,planned=plan_guitar_samples(guitars,source_regions,seed_base=score["bars"]*43)
     return {
+        "candidate_string_aware":planned,
         "style":style,"gestures":len(results),
         "gestures_with_duplicate_strings":sum(x["same_string_collisions"]>0 for x in results),
         "excess_string_occupancies":sum(x["same_string_collisions"] for x in results),
