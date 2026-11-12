@@ -1,0 +1,33 @@
+name: P9 release preservation — no-clobber regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/upload_release_if_missing.sh'
+      - 'tests/test_release_assets_p9.py'
+      - '.github/workflows/music-studio-v7.yml'
+      - '.github/workflows/release-preservation-p9.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repeatable-publishing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate shell script syntax without credentials
+        run: bash -n tools/upload_release_if_missing.sh
+      - name: Verify existing files survive two runs and missing files append only
+        run: python -m unittest tests.test_release_assets_p9 -v
+      - name: Ensure no destructive upload flags in the existing release workflow
+        run: |
+          test -f .github/workflows/music-studio-v7.yml
+          ! grep -q -- '--clobber' .github/workflows/music-studio-v7.yml
+          grep -q 'upload_release_if_missing.sh' .github/workflows/music-studio-v7.yml
