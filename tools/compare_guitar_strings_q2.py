@@ -31,15 +31,26 @@ def run(assets:Path,out:Path,style:str="harbor")->dict:
     t1=round(end_beat*60/original["bpm"]*SR)
     clips={"before":old[t0:t1],"after":new[t0:t1]}
     if len(clips["before"])<4*SR:raise AssertionError("Not enough sample preview")
-    target=float(np.sqrt(np.mean(clips["before"].astype(np.float64)**2)))
+    # Make short, click-free *and level-matched* comparisons. Keep one common
+    # peak ceiling on both so that clipping prevention cannot reintroduce a
+    # loudness advantage to either sample-string choice.
+    n=len(clips["before"])
+    envelope=np.ones(n,np.float32)
+    fade_in=min(n//4,round(.02*SR))
+    fade_out=min(n//4,round(.12*SR))
+    envelope[:fade_in]=np.linspace(0,1,fade_in,dtype=np.float32)
+    envelope[-fade_out:]=np.linspace(1,0,fade_out,dtype=np.float32)
+    trimmed={key:wave*envelope[:,None] for key,wave in clips.items()}
+    rms_by_key={key:max(1e-12,float(np.sqrt(np.mean(wave.astype(np.float64)**2))))
+                for key,wave in trimmed.items()}
+    target=min(rms_by_key.values())
+    factors={key:target/rms for key,rms in rms_by_key.items()}
+    loudest=max(float(np.max(np.abs(wave)))*factors[key] for key,wave in trimmed.items())
+    shared_ceiling=min(1.,.85/max(1e-12,loudest))
     root=Path(out);root.mkdir(parents=True,exist_ok=True)
     stats={}
-    for key,wave in clips.items():
-        rms=max(1e-12,float(np.sqrt(np.mean(wave.astype(np.float64)**2))))
-        scale=min(1.2,max(.8,target/rms))
-        peak=max(1e-12,float(np.max(np.abs(wave))))
-        scale=min(scale,.85/peak)
-        y=(wave*scale).astype(np.float32)
+    for key,wave in trimmed.items():
+        y=(wave*factors[key]*shared_ceiling).astype(np.float32)
         wav=root/f"Q2_{style}_strings_{key}.wav"
         mp3=root/f"Q2_{style}_strings_{key}.mp3"
         sf.write(wav,y,SR,subtype="PCM_24")
@@ -51,12 +62,16 @@ def run(assets:Path,out:Path,style:str="harbor")->dict:
                     "duration_s":round(len(y)/SR,3)}
     difference=float(np.sqrt(np.mean((clips["before"]-clips["after"])**2,dtype=np.float64)))
     if difference<1e-7:raise AssertionError("Different chord/string assignments produced identical audio")
+    level_difference=abs(stats["before"]["rms_dbfs"]-stats["after"]["rms_dbfs"])
+    if level_difference>.12:
+        raise AssertionError(f"Unfair guitar A/B RMS level difference: {level_difference:.2f} dB")
     report={
         "style":style,
         "comparison":"Original recorded guitar vs optional independent physical string assignment",
         "guitar_voicing":voicing,
         "audio":stats,
         "source_difference_rms":round(difference,8),
+        "rms_level_difference_db":round(level_difference,3),
         "limitations":"Not a professional guitar performance evaluation or musical preference verdict."
     }
     (root/f"Q2_{style}_strings_report.json").write_text(json.dumps(report,indent=2))
