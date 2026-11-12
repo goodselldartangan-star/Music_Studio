@@ -9,6 +9,8 @@ on:
       - 'tests/test_mix_translation_p7.py'
       - 'tests/test_mix_stems_p7.py'
       - 'tests/test_sections_p8.py'
+      - 'tests/test_release_assets_p9.py'
+      - 'tools/upload_release_if_missing.sh'
       - 'tools/audit_mix_stems_p7.py'
       - 'tools/install_optional_v7.py'
       - 'tools/audit_sample_coverage.py'
@@ -242,5 +244,5 @@ jobs:
             gh release create music-studio-v7-instrument-fit \
               --title 'Music Studio v7 — Instrument Compatibility and Effects' \
               --notes 'Three new original ~35–41-second instrumental previews using actual CC0 recorded Meta Open Sound steel/nylon guitar and piano, FreePats finger/picked bass and clean electric guitar, and MuldjordKit acoustic drums (CC BY 4.0; recordings by DrumGizmo.org). Improvements: native bass range, compact guitar voicings, collision checks, staggered strumming, distinct instrument roles, tempo-synced delay, room sends, tremolo, chorus, kick-bass sidechain, low-frequency mono. Technical checks only; listener feedback is needed.'
-          gh release upload music-studio-v7-instrument-fit \
-              v7-demos/harbor-v7.mp3 v7-demos/after-v7.mp3 v7-demos/silver-v7.mp3 v7-demos/verification_v7.json --clobber
+          bash tools/upload_release_if_missing.sh music-studio-v7-instrument-fit \
+              v7-demos/harbor-v7.mp3 v7-demos/after-v7.mp3 v7-demos/silver-v7.mp3 v7-demos/verification_v7.json
