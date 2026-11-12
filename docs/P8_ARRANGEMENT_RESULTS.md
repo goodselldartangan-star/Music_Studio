@@ -16,7 +16,7 @@ The optional flag is `demo_v7.py --transition-breath`; it generates separate `-p
 - In the After controlled comparison, **one bass pickup at beat 47.52 (MIDI 45)** and **one closed hat at beat 47.53** were omitted.
 - **Pre-transition waveform difference RMS = 0.0**, verifying the earlier score is not inadvertently affected; transition-and-after difference RMS ≈ **0.00069496** in the technical fixture.
 - Tests preserve all lead and nonbass notes, unchanged drum attacks outside the narrow transition window, original bass note lengths, and explicit tail/overlap compatibility.
-- [Real recorded-instrument acceptance workflow 43152723681](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43152723681) **pending** at document creation.
+- [Real recorded-instrument acceptance workflow 43152723681](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43152723681) **passed**, including all original rendered examples and the optional After transition with recorded instruments and decoded MP3 QA.
 
 ## Limits
 
