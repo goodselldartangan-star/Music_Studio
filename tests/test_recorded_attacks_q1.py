@@ -63,10 +63,26 @@ class SourceAttackTests(unittest.TestCase):
             report=audit_all(root)
             for name,c in report['collections'].items():
                 self.assertEqual(c['recordings'],2)
-                self.assertEqual(c['velocity_layer_spread_over_25ms_count'],1)
+                self.assertEqual(c['within_string_layer_spread_over_25ms_count'],1)
                 if name=='meta-piano':
                     self.assertEqual(c['late_review_count'],1)
             self.assertEqual(sample.read_bytes(),before)
+
+    def test_different_guitar_strings_do_not_create_false_layer_outliers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            folder=root/'meta-steel-guitar'
+            folder.mkdir()
+            # Identical pitches can occur on very different physical strings.
+            # Their absolute onsets may differ. Compare only within the same
+            # physical string when assessing velocity-layer inconsistency.
+            for zone,delay in [('A',6),('B',36)]:
+                for layer in (1,2):
+                    sf.write(folder/f'INSGuitarSteel_String{zone}_Vel0{layer}_C4_01.wav',
+                             recording(delay),SR)
+            report=audit_collection(root,'meta-steel-guitar')
+            self.assertEqual(report['recordings'],4)
+            self.assertEqual(report['within_string_layer_spread_over_25ms_count'],0)
 
     def test_missing_library_is_an_error_not_a_mono_fallback(self):
         with tempfile.TemporaryDirectory() as temp:
