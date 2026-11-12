@@ -77,6 +77,15 @@ jobs:
           python -m tools.compare_guitar_strings_q2 --assets assets/q2 --style silver --out q2-previews/silver
           ffmpeg -v error -xerror -i q2-previews/harbor/Q2_harbor_strings_after.mp3 -f null -
           ffmpeg -v error -xerror -i q2-previews/silver/Q2_silver_strings_after.mp3 -f null -
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for style in ('harbor','silver'):
+              result=json.loads((Path('q2-previews')/style/f'Q2_{style}_strings_report.json').read_text())
+              assert result['rms_level_difference_db']<=.12
+              assert result['source_difference_rms']>0
+          print('Level-matched recorded guitar comparison verified')
+          PY
       - name: Preserve technical source mapping, not publisher recording bytes
         uses: actions/upload-artifact@v4
         with:
