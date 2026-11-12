@@ -1,0 +1,53 @@
+name: P4 harmony and piano register — voicing contract and audio QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/registers.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_registers_p4.py'
+      - 'tools/compare_registers_p4.py'
+      - '.github/workflows/registers-p4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  register-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline audio test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Verify chord labels, ranges and prior performance modules
+        run: |
+          python -m unittest tests.test_registers_p4 tests.test_studio7 tests.test_piano_performance_p2 tests.test_drum_dynamics_p3 -v
+      - name: Matched 4-bar piano and lead A/B
+        run: |
+          python -m tools.compare_registers_p4 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p4-register-preview
+          ffmpeg -v error -xerror -i p4-register-preview/P4_register_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p4-register-preview/P4_register_after.mp3 -f null -
+      - name: Integrated optional revoicing
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style silver --register-separation --out p4-integrated
+          test -f p4-integrated/silver-v7-p4-register.mp3
+          test -f p4-integrated/verification_v7.json
+      - name: Retain objective register comparisons
+        uses: actions/upload-artifact@v4
+        with:
+          name: P4-Harmony-Register-Technical-AB
+          path: |
+            p4-register-preview/P4_register_*.mp3
+            p4-register-preview/P4_register_report.json
+            p4-integrated/verification_v7.json
+          retention-days: 90
