@@ -20,7 +20,7 @@
 
 ## Recorded instruments
 
-[Recorded-instrument GitHub run 43150661031](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43150661031) was started after the corrected spatial tests; its real-library Harbor P6 export is **pending verification**, not a passed gate until the workflow completes successfully.
+[Recorded-instrument GitHub run 43150661031](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43150661031) **passed**, including real-library sample installation, original demos, and the optional Harbor P6 room pre-delay render with valid decoded MP3 QA.
 
 ## Acceptance caveat
 
