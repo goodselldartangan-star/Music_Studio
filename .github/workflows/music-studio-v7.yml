@@ -5,6 +5,7 @@ on:
     paths:
       - 'studio7/**'
       - 'tests/test_studio7.py'
+      - 'tests/test_effects_p6.py'
       - 'tools/install_optional_v7.py'
       - 'tools/audit_sample_coverage.py'
       - 'tests/test_sample_coverage.py'
