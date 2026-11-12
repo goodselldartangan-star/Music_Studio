@@ -20,6 +20,7 @@ def main():
     p.add_argument('--register-separation',action='store_true',help='P4 optional piano/foreground octave spacing')
     p.add_argument('--melody-answer',action='store_true',help='P5 optional authored final motif cadence')
     p.add_argument('--room-predelay-ms',type=float,default=0.,help='P6 wet room predelay, 0–160 ms')
+    p.add_argument('--precise-low-mono',action='store_true',help='P7 optional zero-phase low-frequency side rejection')
     a=p.parse_args();results=[]
     for style in ([a.style] if a.style else SONGS):
         mp3,meta=render(style,a.out,assets=a.assets,gm=a.gm,guitar_performance=a.guitar_performance,
@@ -29,7 +30,8 @@ def main():
                         drum_dynamics=a.drum_dynamics,
                         register_separation=a.register_separation,
                         melody_answer=a.melody_answer,
-                        room_predelay_ms=a.room_predelay_ms)
+                        room_predelay_ms=a.room_predelay_ms,
+                        precise_low_mono=a.precise_low_mono)
         report=inspect(mp3)
         results.append({'metadata':meta,'audio_qa':report})
     (a.out/'verification_v7.json').write_text(json.dumps(results,indent=2))
