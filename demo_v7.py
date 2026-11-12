@@ -18,6 +18,7 @@ def main():
     p.add_argument('--rhythm-pocket',action='store_true',help='P3 optional kick/bass pocket')
     p.add_argument('--drum-dynamics',action='store_true',help='P3 optional existing-hit dynamic accents')
     p.add_argument('--register-separation',action='store_true',help='P4 optional piano/foreground octave spacing')
+    p.add_argument('--melody-answer',action='store_true',help='P5 optional authored final motif cadence')
     a=p.parse_args();results=[]
     for style in ([a.style] if a.style else SONGS):
         mp3,meta=render(style,a.out,assets=a.assets,gm=a.gm,guitar_performance=a.guitar_performance,
@@ -25,7 +26,8 @@ def main():
                         piano_performance=a.piano_performance,
                         rhythm_pocket=a.rhythm_pocket,
                         drum_dynamics=a.drum_dynamics,
-                        register_separation=a.register_separation)
+                        register_separation=a.register_separation,
+                        melody_answer=a.melody_answer)
         report=inspect(mp3)
         results.append({'metadata':meta,'audio_qa':report})
     (a.out/'verification_v7.json').write_text(json.dumps(results,indent=2))
