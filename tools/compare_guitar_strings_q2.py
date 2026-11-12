@@ -45,7 +45,8 @@ def run(assets:Path,out:Path,style:str="harbor")->dict:
         sf.write(wav,y,SR,subtype="PCM_24")
         subprocess.run(["ffmpeg","-nostdin","-hide_banner","-v","error","-y",
                         "-i",str(wav),"-c:a","libmp3lame","-b:a","224k",str(mp3)],check=True)
-        stats[key]={"rms_dbfs":round(20*np.log10(max(1e-12,float(np.sqrt(np.mean(y.astype(np.float64)**2)))),2),
+        y_rms=max(1e-12,float(np.sqrt(np.mean(y.astype(np.float64)**2))))
+        stats[key]={"rms_dbfs":round(20*np.log10(y_rms),2),
                     "peak_dbfs":round(20*np.log10(max(1e-12,float(np.max(np.abs(y))))),2),
                     "duration_s":round(len(y)/SR,3)}
     difference=float(np.sqrt(np.mean((clips["before"]-clips["after"])**2,dtype=np.float64)))
