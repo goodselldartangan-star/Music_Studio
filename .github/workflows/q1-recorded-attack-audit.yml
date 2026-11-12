@@ -1,0 +1,65 @@
+name: Q1 source attack audit — real recorded sample files
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audit_recorded_attacks_q1.py'
+      - 'tests/test_recorded_attacks_q1.py'
+      - '.github/workflows/q1-recorded-attack-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-attack-detector:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline waveform fixture tests
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_recorded_attacks_q1 tests.test_sample_take_identity -v
+
+  audit-recorded-libraries:
+    needs: test-attack-detector
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local DSP readers only
+        run: python -m pip install -r requirements.txt
+      - name: Download exact pinned publisher archives; no other AI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .q1-downloads
+          gh release download meta-steel-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' --dir .q1-downloads
+          gh release download meta-piano-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-piano-ogg.zip' --dir .q1-downloads
+          gh release download meta-nylon-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-nylon-guitar-ogg.zip' --dir .q1-downloads
+      - name: Unpack licensed instruments and verify source integrity
+        run: |
+          python tools/install_cc0.py --no-download --guitar-zip .q1-downloads/meta-open-sound-meta-steel-guitar-ogg.zip --piano-zip .q1-downloads/meta-open-sound-meta-piano-ogg.zip --out assets/q1
+          python - <<'PY'
+          from pathlib import Path
+          from tools.install_optional_v7 import install_nylon
+          install_nylon(Path('.q1-downloads/meta-open-sound-meta-nylon-guitar-ogg.zip'),Path('assets/q1'))
+          PY
+      - name: Audit 1075 recordings, source channels and relative velocity attack alignment
+        run: python -m tools.audit_recorded_attacks_q1 --assets assets/q1 --out q1-reports/recorded_attack_audit.json
+      - name: Preserve non-destructive measured evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q1-Recorded-Instrument-Attack-Inventory
+          path: |
+            q1-reports/recorded_attack_audit.json
+            assets/q1/provenance.json
+          retention-days: 90
