@@ -168,6 +168,19 @@ jobs:
           assert (folder/'after-v7-p5-answer.mp3').is_file()
           print('P5 recorded-instrument final cadence passed technical QA; preference not asserted.')
           PY
+      - name: Verify optional P6 room pre-delay with recorded piano and guitar
+        run: |
+          python demo_v7.py --assets assets/v7 --style harbor --room-predelay-ms 32 --out v7-p6-harbor
+          python - <<'PY'
+          import json,pathlib
+          out=pathlib.Path('v7-p6-harbor')
+          r=json.loads((out/'verification_v7.json').read_text())[0]
+          assert r['metadata']['backend']=='recorded instruments'
+          assert r['metadata']['room_predelay_ms']==32
+          assert r['audio_qa']['passed']
+          assert (out/'harbor-v7-p6-room32ms.mp3').is_file()
+          print('P6 optional room pre-delay rendered with original recorded samples; preference untested')
+          PY
       - name: Retain all three listening demos and provenance
         uses: actions/upload-artifact@v4
         with:
@@ -184,6 +197,7 @@ jobs:
             v7-p3-drum-after/verification_v7.json
             v7-p4-silver/verification_v7.json
             v7-p5-after/verification_v7.json
+            v7-p6-harbor/verification_v7.json
             assets/v7/*provenance*.json
           retention-days: 90
       - name: Publish new release without rewriting older recordings
