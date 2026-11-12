@@ -22,6 +22,7 @@ from .registers import separate_lead_piano
 from .melody import shape_final_answer
 from .mix_translation import precise_mono_below
 from .sections import shape_transition_breath
+from .string_mapping import plan_guitar_samples,shape_harbor_bm_guitar
 
 DRUM_MAP={'kick':36,'snare':38,'hat':42,'open_hat':46,'tom':45,'rim':37,'crash':49}
 GM_PROGRAM={'acoustic':25,'electric':27,'piano':0,'bass':33,'lead':26,'drums':0}
@@ -48,7 +49,7 @@ def _render_with_gm(path:Path,notes:list[dict],seconds:float,bpm:int,part:str):
     finally: fs.close()
 
 
-def _sample_meta(score:dict,part:str,assets:Path):
+def _sample_meta(score:dict,part:str,assets:Path,*,string_aware=False):
     # Reuse the existing CC0 Meta sampler; that module owns sample parsing.
     from studio3.sample_bank import SampleBank
     from studio3.spec import Note
@@ -56,17 +57,26 @@ def _sample_meta(score:dict,part:str,assets:Path):
     if part=='acoustic' and score['style']=='silver':
         collection=Collection(assets,'meta-nylon-guitar')
         frames=round(score['duration']*SR);dest=np.zeros((frames,2),dtype=np.float32)
-        for i,n in enumerate(x for x in score['notes'] if x['instrument']==part):
-            raw=collection.render(n['pitch'],n['velocity'],n['length'],score['bpm'],i+int(n['beat']*100))
+        acoustic=[n for n in score['notes'] if n['instrument']==part]
+        selected=(plan_guitar_samples(acoustic,collection.regions,seed_base=score['bars']*43)[0]
+                  if string_aware else None)
+        for i,n in enumerate(acoustic):
+            raw=collection.render(n['pitch'],n['velocity'],n['length'],score['bpm'],
+                                  i+int(n['beat']*100),
+                                  region=selected[i] if selected is not None else None)
             st=round(n['beat']*60/score['bpm']*SR);en=min(frames,st+len(raw))
             if en>st:dest[st:en]+=raw[:en-st,None]*.7071
         return dest
     key={'acoustic':'pluck','piano':'keys'}[part]
     if not bank.has(key):raise FileNotFoundError(f'Missing CC0 {key} samples in {assets}')
     frames=round(score['duration']*SR);dest=np.zeros((frames,2),dtype=np.float32)
-    for i,n in enumerate(x for x in score['notes'] if x['instrument']==part):
+    active=[n for n in score['notes'] if n['instrument']==part]
+    selected=(plan_guitar_samples(active,bank.regions['meta-steel-guitar'],seed_base=score['bars']*43)[0]
+              if string_aware and part=='acoustic' else None)
+    for i,n in enumerate(active):
         voice=Note(key,n['beat'],n['length'],n['pitch'],n['velocity']/127,0)
-        raw=render_meta_note(bank,voice,score['bpm'],score['bars']*43+i)
+        raw=render_meta_note(bank,voice,score['bpm'],score['bars']*43+i,
+                             region=selected[i] if selected is not None else None)
         start=round(n['beat']*60/score['bpm']*SR)
         end=min(frames,start+len(raw))
         if end>start:
@@ -74,7 +84,7 @@ def _sample_meta(score:dict,part:str,assets:Path):
     return dest
 
 
-def instrument_stems(score:dict,assets:Path|None=None,gm:Path|None=None)->dict:
+def instrument_stems(score:dict,assets:Path|None=None,gm:Path|None=None,*,guitar_string_mapping=False)->dict:
     """Real backend: v6 downloaded CC0/CC-BY soundfonts + Meta samples.
     Portable offline fallback: system GM SoundFont only, explicitly labeled.
     """
@@ -90,7 +100,7 @@ def instrument_stems(score:dict,assets:Path|None=None,gm:Path|None=None)->dict:
         if gm:
             out[name]=_render_with_gm(gm,active,dur,bpm,name)
         elif name in ('acoustic','piano'):
-            out[name]=_sample_meta(score,name,assets)
+            out[name]=_sample_meta(score,name,assets,string_aware=(name=='acoustic' and guitar_string_mapping))
         else:
             font=assets/'sf2'/('bass_picked.sf2' if name=='bass' and score['style']=='after' else f'{"electric" if name=="lead" else name}.sf2')
             out[name]=render_polyphonic(font,active,dur,bpm,part=name,program=0)
@@ -174,7 +184,8 @@ def process_stems(score:dict,raw:dict,with_effects=True,room_predelay_ms=0.,prec
 def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
            with_effects=True,guitar_performance=False,bass_performance=False,piano_performance=False,
            rhythm_pocket=False,drum_dynamics=False,register_separation=False,melody_answer=False,
-           room_predelay_ms=0.,precise_low_mono=False,transition_breath=False):
+           room_predelay_ms=0.,precise_low_mono=False,transition_breath=False,
+           guitar_string_mapping=False):
     if not math.isfinite(room_predelay_ms) or not 0<=room_predelay_ms<=160:
         raise ValueError('Room predelay must be 0–160 milliseconds')
     score=make(style);validate(score)
@@ -210,12 +221,17 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
     if transition_breath:
         score,transition_report=shape_transition_breath(score)
         validate(score)
+    string_voicing_report=None
+    if guitar_string_mapping:
+        score,string_voicing_report=shape_harbor_bm_guitar(score)
+        validate(score)
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
-    raw=instrument_stems(score,assets=assets,gm=gm)
+    raw=instrument_stems(score,assets=assets,gm=gm,
+                         guitar_string_mapping=guitar_string_mapping)
     mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects,
                                           room_predelay_ms=room_predelay_ms,
                                           precise_low_mono=precise_low_mono)
-    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '') + ('-p8-breath' if transition_breath else '')
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '') + ('-p8-breath' if transition_breath else '') + ('-q2-strings' if guitar_string_mapping else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -234,7 +250,9 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
           'melody_answer':melody_report,
           'room_predelay_ms':room_predelay_ms,
           'precise_low_mono':precise_low_mono,
-          'transition_breath':transition_report,**diagnostics}
+          'transition_breath':transition_report,
+          'guitar_string_mapping':guitar_string_mapping,
+          'guitar_voicing':string_voicing_report,**diagnostics}
     (out/(stem+'.score.json')).write_text(json.dumps(score,indent=2))
     (out/(stem+'.metadata.json')).write_text(json.dumps(meta,indent=2))
     return mp3,meta
