@@ -149,8 +149,8 @@ def main() -> None:
     print(json.dumps({
         name: {k: v[k] for k in ("recordings","channel_counts","formats","sample_rates_hz",
                                  "onset_p50_ms","onset_p95_ms","late_review_count",
-                                 "velocity_layer_spread_over_25ms_count",
-                                 "late_review_examples","velocity_layer_spread_examples")}
+                                 "within_string_layer_spread_over_25ms_count",
+                                 "late_review_examples","within_string_layer_spread_examples")}
         for name,v in report["collections"].items()
     },indent=2))
 
