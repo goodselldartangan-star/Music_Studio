@@ -144,14 +144,14 @@ def render_polyphonic(soundfont:Path,notes:list[dict],seconds:float,bpm:int,
         engine.close()
 
 
-def render_meta_note(bank, note, bpm:int, seed:int)->np.ndarray:
+def render_meta_note(bank, note, bpm:int, seed:int, *, region=None)->np.ndarray:
     """SampleBank compatible, but with independent musical release behavior.
 
     Keep the old shared SampleBank untouched for prior Music Studio versions.
     """
     from studio3.sample_bank import _at_pitch
     if note.part not in ('pluck','keys'):raise ValueError('Unsupported recorded note role')
-    region=bank._select(note,seed)
+    region=bank._select(note,seed) if region is None else region
     raw=_at_pitch(region.path,region.midi,note.pitch)
     part='acoustic' if note.part=='pluck' else 'piano'
     out=smooth_release(raw,note.duration*60/bpm,part=part)
