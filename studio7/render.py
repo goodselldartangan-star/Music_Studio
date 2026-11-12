@@ -21,6 +21,7 @@ from .drum_dynamics import shape_drum_dynamics
 from .registers import separate_lead_piano
 from .melody import shape_final_answer
 from .mix_translation import precise_mono_below
+from .sections import shape_transition_breath
 
 DRUM_MAP={'kick':36,'snare':38,'hat':42,'open_hat':46,'tom':45,'rim':37,'crash':49}
 GM_PROGRAM={'acoustic':25,'electric':27,'piano':0,'bass':33,'lead':26,'drums':0}
@@ -173,7 +174,7 @@ def process_stems(score:dict,raw:dict,with_effects=True,room_predelay_ms=0.,prec
 def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
            with_effects=True,guitar_performance=False,bass_performance=False,piano_performance=False,
            rhythm_pocket=False,drum_dynamics=False,register_separation=False,melody_answer=False,
-           room_predelay_ms=0.,precise_low_mono=False):
+           room_predelay_ms=0.,precise_low_mono=False,transition_breath=False):
     if not math.isfinite(room_predelay_ms) or not 0<=room_predelay_ms<=160:
         raise ValueError('Room predelay must be 0–160 milliseconds')
     score=make(style);validate(score)
@@ -205,12 +206,16 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
     if register_separation:
         score,register_report=separate_lead_piano(score)
         validate(score)
+    transition_report=None
+    if transition_breath:
+        score,transition_report=shape_transition_breath(score)
+        validate(score)
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     raw=instrument_stems(score,assets=assets,gm=gm)
     mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects,
                                           room_predelay_ms=room_predelay_ms,
                                           precise_low_mono=precise_low_mono)
-    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '')
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '') + ('-p8-breath' if transition_breath else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -228,7 +233,8 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
           'register_separation':register_report,
           'melody_answer':melody_report,
           'room_predelay_ms':room_predelay_ms,
-          'precise_low_mono':precise_low_mono,**diagnostics}
+          'precise_low_mono':precise_low_mono,
+          'transition_breath':transition_report,**diagnostics}
     (out/(stem+'.score.json')).write_text(json.dumps(score,indent=2))
     (out/(stem+'.metadata.json')).write_text(json.dumps(meta,indent=2))
     return mp3,meta
