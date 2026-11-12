@@ -8,6 +8,7 @@ overlapping audio, or change older Studio versions' samplers.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from copy import deepcopy
 from hashlib import sha256
 from itertools import product
 from pathlib import Path
@@ -160,3 +161,53 @@ def plan_guitar_samples(notes:Sequence[dict],regions:Sequence[object],*,seed_bas
              "assignments":summaries,
              "limitations":"Physical sample selection in each strum, not a full fretboard simulation; existing overlapping note tails are unchanged."}
     return [r.region for r in choices],metrics
+
+
+def shape_harbor_bm_guitar(score:dict)->tuple[dict,dict]:
+    """Opt-in playable B-minor voicing: x24432 instead of x? original cluster.
+
+    The old B2 D3 F#3 B3 pitch grouping lacks four independently recorded
+    strings (B2 is only on the A string). Revoice it to B2 F#3 B3 D4,
+    retaining precisely the B-minor pitch-class multiset, note count, attack
+    order, authored timings/velocities/lengths and existing release tails.
+    This is intentionally narrow: no generic theory-changing revoicer.
+    """
+    out=deepcopy(score)
+    if score.get("style")!="harbor":
+        return out,{"chords_revoiced":0,"notes_repitched":0,"other_parts_unchanged":True}
+    notes=out["notes"]
+    acoustic=sorted((i for i,n in enumerate(notes) if n["instrument"]=="acoustic"),
+                    key=lambda i:(notes[i]["beat"],notes[i]["pitch"]))
+    groups=[];k=0
+    while k<len(acoustic):
+        start=notes[acoustic[k]]["beat"]
+        group=[acoustic[k]];k+=1
+        while k<len(acoustic) and notes[acoustic[k]]["beat"]-start<=.18:
+            group.append(acoustic[k]);k+=1
+        groups.append(group)
+    updated=0;changed=0
+    for group in groups:
+        if len(group)!=4:
+            continue
+        seq=[notes[i]["pitch"] for i in group]
+        if sorted(seq)!=[47,50,54,59]:
+            continue
+        if any(notes[i].get("voicing")=="fixed" for i in group):
+            continue
+        at=notes[group[0]]["beat"]
+        # Only the original Bm bars in Harbor's four-bar harmony.
+        if int(at//4)%4!=2:
+            continue
+        upward=all(a<b for a,b in zip(seq,seq[1:]))
+        downward=all(a>b for a,b in zip(seq,seq[1:]))
+        if not (upward or downward):
+            continue
+        target=[47,54,59,62]
+        if downward:
+            target.reverse()
+        for i,pitch in zip(group,target):
+            changed+=int(notes[i]["pitch"]!=pitch)
+            notes[i]["pitch"]=pitch
+        updated+=1
+    return out,{"chords_revoiced":updated,"notes_repitched":changed,
+                "preserved_pitch_classes":True,"other_parts_unchanged":True}
