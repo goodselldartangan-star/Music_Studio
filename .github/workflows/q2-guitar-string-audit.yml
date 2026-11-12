@@ -8,6 +8,11 @@ on:
       - 'tests/test_guitar_strings_q2.py'
       - 'studio7/string_mapping.py'
       - 'tests/test_string_mapping_q2.py'
+      - 'tools/compare_guitar_strings_q2.py'
+      - 'studio7/render.py'
+      - 'studio7/samples.py'
+      - 'studio7/articulation.py'
+      - 'demo_v7.py'
       - '.github/workflows/q2-guitar-string-audit.yml'
   workflow_dispatch:
 
@@ -48,9 +53,38 @@ jobs:
       - name: Audit original Harbor and Silver string assignments without changing playback
         run: |
           python -m tools.audit_guitar_strings_q2 --assets assets/q2 --out q2-reports/legacy_guitar_string_assignments.json
+      - name: Verify source-map candidate does not double-assign physical chord strings
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('q2-reports/legacy_guitar_string_assignments.json').read_text())
+          assert report['harbor']['gestures_with_duplicate_strings']==24
+          assert report['silver']['gestures_with_duplicate_strings']==2
+          for style in ('harbor','silver'):
+              candidate=report[style]['candidate_with_playable_bm_revoicing']
+              assert candidate['remaining_intra_strum_string_conflicts']==0
+              assert candidate['unmapped_strums']==0
+              assert candidate['mapped_distinct_strums']==report[style]['gestures']
+          assert report['harbor']['guitar_voicing_change']['chords_revoiced']==8
+          print('Every existing acoustic guitar chord has a distinct physical string map')
+          PY
+      - name: Render actual steel/nylon guitar only at controlled matched loudness
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          python -m tools.compare_guitar_strings_q2 --assets assets/q2 --style harbor --out q2-previews/harbor
+          python -m tools.compare_guitar_strings_q2 --assets assets/q2 --style silver --out q2-previews/silver
+          ffmpeg -v error -xerror -i q2-previews/harbor/Q2_harbor_strings_after.mp3 -f null -
+          ffmpeg -v error -xerror -i q2-previews/silver/Q2_silver_strings_after.mp3 -f null -
       - name: Preserve technical source mapping, not publisher recording bytes
         uses: actions/upload-artifact@v4
         with:
           name: Q2-Guitar-Legacy-Physical-String-Audit
-          path: q2-reports/legacy_guitar_string_assignments.json
+          path: |
+            q2-reports/legacy_guitar_string_assignments.json
+            q2-previews/harbor/*.mp3
+            q2-previews/harbor/*report.json
+            q2-previews/silver/*.mp3
+            q2-previews/silver/*report.json
           retention-days: 90
