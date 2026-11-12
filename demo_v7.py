@@ -22,6 +22,7 @@ def main():
     p.add_argument('--room-predelay-ms',type=float,default=0.,help='P6 wet room predelay, 0–160 ms')
     p.add_argument('--precise-low-mono',action='store_true',help='P7 optional zero-phase low-frequency side rejection')
     p.add_argument('--transition-breath',action='store_true',help='P8 optional backing pause before returning final section')
+    p.add_argument('--guitar-string-mapping',action='store_true',help='Q2 optional physically mapped recorded guitar chord strings')
     a=p.parse_args();results=[]
     for style in ([a.style] if a.style else SONGS):
         mp3,meta=render(style,a.out,assets=a.assets,gm=a.gm,guitar_performance=a.guitar_performance,
@@ -33,7 +34,8 @@ def main():
                         melody_answer=a.melody_answer,
                         room_predelay_ms=a.room_predelay_ms,
                         precise_low_mono=a.precise_low_mono,
-                        transition_breath=a.transition_breath)
+                        transition_breath=a.transition_breath,
+                        guitar_string_mapping=a.guitar_string_mapping)
         report=inspect(mp3)
         results.append({'metadata':meta,'audio_qa':report})
     (a.out/'verification_v7.json').write_text(json.dumps(results,indent=2))
