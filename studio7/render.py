@@ -19,6 +19,7 @@ from .piano_performance import shape_piano
 from .rhythm import shape_pocket
 from .drum_dynamics import shape_drum_dynamics
 from .registers import separate_lead_piano
+from .melody import shape_final_answer
 
 DRUM_MAP={'kick':36,'snare':38,'hat':42,'open_hat':46,'tom':45,'rim':37,'crash':49}
 GM_PROGRAM={'acoustic':25,'electric':27,'piano':0,'bass':33,'lead':26,'drums':0}
@@ -170,7 +171,7 @@ def process_stems(score:dict,raw:dict,with_effects=True)->tuple[np.ndarray,dict,
 
 def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
            with_effects=True,guitar_performance=False,bass_performance=False,piano_performance=False,
-           rhythm_pocket=False,drum_dynamics=False,register_separation=False):
+           rhythm_pocket=False,drum_dynamics=False,register_separation=False,melody_answer=False):
     score=make(style);validate(score)
     performance_report=None
     if guitar_performance:
@@ -192,6 +193,10 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
     if drum_dynamics:
         score,drum_report=shape_drum_dynamics(score)
         validate(score)
+    melody_report=None
+    if melody_answer:
+        score,melody_report=shape_final_answer(score)
+        validate(score)
     register_report=None
     if register_separation:
         score,register_report=separate_lead_piano(score)
@@ -199,7 +204,7 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     raw=instrument_stems(score,assets=assets,gm=gm)
     mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects)
-    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '')
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -214,7 +219,8 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
           'piano_performance':piano_report,
           'rhythm_pocket':rhythm_report,
           'drum_dynamics':drum_report,
-          'register_separation':register_report,**diagnostics}
+          'register_separation':register_report,
+          'melody_answer':melody_report,**diagnostics}
     (out/(stem+'.score.json')).write_text(json.dumps(score,indent=2))
     (out/(stem+'.metadata.json')).write_text(json.dumps(meta,indent=2))
     return mp3,meta
