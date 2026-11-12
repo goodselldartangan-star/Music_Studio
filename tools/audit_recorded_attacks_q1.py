@@ -10,6 +10,7 @@ from pathlib import Path
 import argparse
 import json
 import math
+import re
 
 import numpy as np
 import soundfile as sf
@@ -72,7 +73,7 @@ def audit_collection(root: Path, collection: str) -> dict:
     if not folder.is_dir():
         raise FileNotFoundError(f"Missing {folder}")
     entries = []
-    by_pitch = defaultdict(list)
+    by_pitch_string = defaultdict(list)
     for file in sorted(folder.rglob("*")):
         if not file.is_file() or file.suffix.lower() not in (".ogg", ".wav", ".flac"):
             continue
@@ -81,9 +82,14 @@ def audit_collection(root: Path, collection: str) -> dict:
             continue
         detail = examine_file(file)
         detail.update({"midi_pitch": midi_from_name(match[2]), "layer": int(match[1])})
+        # Two samples can share MIDI pitch but be played on different physical
+        # guitar strings, which have intentionally different attack envelopes.
+        # Compare dynamic layers *within one string zone*, not across strings.
+        zone_match = re.search(r"_String([^_]+)_Vel", file.name, re.I)
+        detail["string_zone"] = zone_match.group(1) if zone_match else "keyboard"
         entries.append(detail)
         if detail["onset_ms"] is not None:
-            by_pitch[detail["midi_pitch"]].append(detail)
+            by_pitch_string[(detail["midi_pitch"],detail["string_zone"])].append(detail)
     if not entries:
         raise AssertionError(f"No playable recordings found in {folder}")
 
@@ -94,14 +100,15 @@ def audit_collection(root: Path, collection: str) -> dict:
     late = [x for x in entries if x["onset_ms"] is not None
             and x["onset_ms"] >= LATE_REVIEW_MS[collection]]
     differing_layers = []
-    for pitch, notes in by_pitch.items():
+    for (pitch, zone), notes in by_pitch_string.items():
         if len(notes) < 2:
             continue
         t = [x["onset_ms"] for x in notes]
         span = max(t)-min(t)
         if span >= 25:
             differing_layers.append({
-                "midi_pitch": pitch, "spread_ms": round(span, 2),
+                "midi_pitch": pitch, "string_zone": zone,
+                "spread_ms": round(span, 2),
                 "layers": [{"layer": n["layer"], "filename": n["filename"],
                             "onset_ms": n["onset_ms"]} for n in notes]
             })
@@ -116,8 +123,8 @@ def audit_collection(root: Path, collection: str) -> dict:
         "late_review_threshold_ms": LATE_REVIEW_MS[collection],
         "late_review_count": len(late),
         "late_review_examples": late[:20],
-        "velocity_layer_spread_over_25ms_count": len(differing_layers),
-        "velocity_layer_spread_examples": differing_layers[:15],
+        "within_string_layer_spread_over_25ms_count": len(differing_layers),
+        "within_string_layer_spread_examples": differing_layers[:15],
         "all_onsets_detected": len(onsets)==len(entries),
         "limitations": "RMS threshold detects energy, not musical onset or intentional pick/finger transients."
     }
