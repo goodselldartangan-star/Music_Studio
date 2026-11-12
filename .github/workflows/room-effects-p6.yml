@@ -1,0 +1,52 @@
+name: P6 room depth — impulse, stereo and full mix QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/effects.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_effects_p6.py'
+      - 'tools/compare_room_p6.py'
+      - '.github/workflows/room-effects-p6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  room-spatial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline sampled instrument fixture and audio tools
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Verify reverb timing, bypass, delay and prior score contracts
+        run: python -m unittest tests.test_effects_p6 tests.test_studio7 -v
+      - name: Render isolated matched room A/B with same piano patch and source notes
+        run: |
+          python -m tools.compare_room_p6 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p6-room-preview
+          ffmpeg -v error -xerror -i p6-room-preview/P6_room_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p6-room-preview/P6_room_after.mp3 -f null -
+      - name: Verify 0ms default and optional room effect in complete arrangement
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style harbor --room-predelay-ms 32 --out p6-room-integrated
+          test -f p6-room-integrated/harbor-v7-p6-room32ms.mp3
+          test -f p6-room-integrated/verification_v7.json
+      - name: Preserve technical comparisons
+        uses: actions/upload-artifact@v4
+        with:
+          name: P6-Room-Predelay-Technical-Comparison
+          path: |
+            p6-room-preview/P6_room_*.mp3
+            p6-room-preview/P6_room_report.json
+            p6-room-integrated/verification_v7.json
+          retention-days: 90
