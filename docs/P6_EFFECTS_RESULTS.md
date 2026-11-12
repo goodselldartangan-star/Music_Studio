@@ -20,7 +20,7 @@
 
 ## Recorded instruments
 
-[Real-sample workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43150743337) is an illustrative future run ID only if verified; **do not cite or treat that placeholder as a successful run**. Final acceptance requires the actual verified GitHub run containing the optional Harbor P6 recording.
+[Recorded-instrument GitHub run 43150661031](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43150661031) was started after the corrected spatial tests; its real-library Harbor P6 export is **pending verification**, not a passed gate until the workflow completes successfully.
 
 ## Acceptance caveat
 
