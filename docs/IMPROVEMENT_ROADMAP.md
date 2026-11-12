@@ -4,7 +4,7 @@
 
 **Listening policy:** Default to autonomous testing. Ask for listener feedback only when two or more technically valid choices differ in musical *feel*, timbre, groove or taste and those differences cannot be resolved by objective checks. When asking, provide a short level-matched A/B with one change, what to listen for, and no unrelated choices. Never require input to run automated tests.
 
-**Current focus: P9.** P0–P8 have passed their scoped engineering gates, but musical/production preference remains unjudged. P9 is active for release safety and reproducible integration.
+**Checklist status: P0–P9 scoped engineering gates completed.** All technical acceptance checks passed. **Musical taste, full professional production quality, and optional setting preferences remain unvalidated**; future work should use one short, level-matched preference comparison only when justified, not a new long demo by default.
 
 | Order | Major subsystem | Status | Work to do | Completion gate (automatic unless marked *) |
 |---|---|---|---|---|
@@ -17,7 +17,7 @@
 | **P6** | **Effects and sonic depth** | **DONE — room predelay/bypass, stereo and recorded-asset QA passed** | Deliberate shared room, predelay, stereo delay, modulation, distortion and automation; evaluate per-instrument wet/dry | Stereo/mono, decay, unwanted resonance, clipping and phase tests; bypass comparison has one processing change; don't mask lead transients. *Spatial preference may need listening.* |
 | **P7** | **Mix balance / masking** | **DONE — stereo side, true-peak and stem spectrum QA passed real samples** | Per-stem gain staging, frequency overlap, transient separation, kick/bass hierarchy, translation to mono and headphones | Peak/true peak/LUFS/dynamic range/phase/stem tests; consistent matched-loudness comparisons. *Final balance taste may need listening.* |
 | **P8** | **Section arrangement / transitions** | **DONE — controlled backing break and recorded-sample QA passed** | Contrasting verses/choruses, rests and fills, dynamics, return of signature motif; no rigid four-bar repeat template | Section metrics, structural audit, variation across repeats, clean transition tails and fade; end-to-end score reproducibility. |
-| **P9** | **Production acceptance and maintainability** | **ACTIVE — release immutability and end-to-end checks** | Consolidate integration tests, enable CI gates, remove unused duplicate workflow triggers only with proof, keep docs GPT-readable | Tests run on clean environment, documented asset licenses, reproducible previews/masters; modules remain isolated; no regression across old releases. |
+| **P9** | **Production acceptance and maintainability** | **DONE — 189-test clean runner, real samples and no-clobber release safety** | Consolidate integration tests, enable CI gates, remove unused duplicate workflow triggers only with proof, keep docs GPT-readable | Tests run on clean environment, documented asset licenses, reproducible previews/masters; modules remain isolated; no regression across old releases. |
 
 ## Repeatable task protocol
 
@@ -101,3 +101,10 @@ User asked whether the same instrument can play a chord and re-pluck a pitch whi
 - [P8 26-test clean runner](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43152580420) verified zero audio difference before the intended break and full optional MP3 export.
 - [P8 recorded-instrument acceptance](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43152723681) passed all previous publisher-sample checks plus the optional After transition.
 - The quiet break is not made default; whether it helps the musical build remains a listening question. **Next P9:** protect previous GitHub release assets and consolidate acceptance evidence.
+
+## P9 engineering completion and next gate (2026-11-11)
+
+- [P9 final technical acceptance report](P9_PRODUCTION_ACCEPTANCE.md) and [dedicated 4-test release safety workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43153356836) passed.
+- [Full clean recorded-instrument workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43153298828) passed **189 unit tests** and all demo MP3 integrity checks; existing release recordings and verification asset were **explicitly preserved** in its logs (no overwritten assets).
+- Completed P0–P9 means the *engineering tasks and their testable contracts* are done, **not** that instrumentation, groove, melody, mix or emotional impact sound professionally convincing. Piano pedal resonance and subjective decisions remain intentionally deferred.
+- All P2–P8 treatments remain optional and default original scores/FX/published demos preserved. Next phase: only consider a **single isolated, short A/B for a specific musical preference** when automated checks cannot decide. Do not use aggregate quality metrics as a surrogate for listening.
