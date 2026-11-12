@@ -9,6 +9,8 @@ on:
       - 'demo_v7.py'
       - 'tests/test_mix_translation_p7.py'
       - 'tools/compare_mix_p7.py'
+      - 'tools/audit_mix_stems_p7.py'
+      - 'tests/test_mix_stems_p7.py'
       - '.github/workflows/mix-translation-p7.yml'
   workflow_dispatch:
 
@@ -31,12 +33,14 @@ jobs:
           sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
       - name: Test low band side translation, center preservation, peaks and existing quality
         run: |
-          python -m unittest tests.test_mix_translation_p7 tests.test_effects_p6 tests.test_studio7 -v
+          python -m unittest tests.test_mix_translation_p7 tests.test_mix_stems_p7 tests.test_effects_p6 tests.test_studio7 -v
       - name: Render P7 full same-source mix comparison and check MP3 decoding
         run: |
           python -m tools.compare_mix_p7 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p7-mix-preview
           ffmpeg -v error -xerror -i p7-mix-preview/P7_mono_before.mp3 -f null -
           ffmpeg -v error -xerror -i p7-mix-preview/P7_mono_after.mp3 -f null -
+      - name: Audit actual processed stem frequency occupancy
+        run: python -m tools.audit_mix_stems_p7 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style after --out p7-mix-preview/P7_stem_inventory.json
       - name: Verify optional precise mono inside complete MP3 render
         run: |
           python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style after --precise-low-mono --out p7-integrated
@@ -49,5 +53,6 @@ jobs:
           path: |
             p7-mix-preview/P7_mono_*.mp3
             p7-mix-preview/P7_mono_report.json
+            p7-mix-preview/P7_stem_inventory.json
             p7-integrated/verification_v7.json
           retention-days: 90
