@@ -20,8 +20,10 @@ def run(gm:Path,out:Path)->dict:
         mixed[name]=audio
     start,end=round(4*SR),round(20*SR)
     stats={key:mix_translation_metrics(wave[start:end]) for key,wave in mixed.items()}
-    if stats['after']['low_side_fraction']>stats['before']['low_side_fraction']+.005:
-        raise AssertionError('Precise mono worsened side energy below 150Hz')
+    # Both relative fraction and absolute low-side energy are reported.
+    # A low-side *fraction* cannot detect attenuation of a fully anti-phase stem.
+    if stats['after']['low_side_rms_dbfs']>stats['before']['low_side_rms_dbfs']+.25:
+        raise AssertionError('Precise mono increased absolute low-side energy below 150Hz')
     if stats['after']['estimated_true_peak_dbfs']>0:
         raise AssertionError('True peak would exceed digital full scale')
     root=Path(out);root.mkdir(parents=True,exist_ok=True)
