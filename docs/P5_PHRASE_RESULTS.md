@@ -24,7 +24,7 @@ The optional CLI flag is `--melody-answer`. The default output is untouched, wit
 
 - [P5 clean runner 43149596445](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43149596445) passed **31 unit tests**, the score-only phrase report, identical-patch melody A/B render and a complete optional After MP3 render.
 - Existing [P5 run 43125967486](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43125967486) passed earlier 27 tests and a matched melody comparison.
-- Full recorded-instrument verification: [workflow 43149618708](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43149618708). **Pending at time of report creation**; completion requires that job to succeed.
+- Full recorded-instrument verification: [workflow 43149618708](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43149618708). **Passed**: the real instrument libraries were downloaded, the optional After P5 cadence rendered with its original sampled lead and accompaniment, and the MP3 QA gate succeeded.
 
 ## Acceptance caveat
 
