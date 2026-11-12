@@ -26,9 +26,18 @@ Additional `tools.audit_mix_stems_p7` provides independent per-stem RMS and spec
 
 ## Remaining gates
 
-- [Expanded P7 same-patch run 43151836846](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43151836846): **pending at report creation**; adds stem-band fixtures and saved real score spectral report.
-- [Full real recorded-instrument run 43151867062](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43151867062): **pending at report creation**, verifies the P7 option on real CC0 and CC-BY libraries and MP3 QA.
+- [Expanded P7 same-patch run 43151836846](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43151836846): **passed 33 tests**, added the processed-stem inventory, full before/after mix and MP3 decode.
+- [Full real recorded-instrument run 43151867062](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43151867062): **passed** all base sample renders plus the optional After P7 mono-filter render and MP3 QA.
 
 ## Limitations
 
 True-peak here is an oversampled PCM **estimate**, not an international mastering standard certification. RMS/phase/spectral-band measurements do not establish desirable subjective EQ, musical masking or better playback on all devices. Perceived mix decisions should remain separate from technical defect prevention; do not tune a master to an arbitrary target curve without reference and listening context.
+
+## Processed stem inventory (After GM fixture)
+
+- **Drums:** -23.8 dBFS RMS; 84.86% of measured 35–8000 Hz energy in 35–160 Hz.
+- **Bass:** -24.46 dBFS RMS; 40.93% in 35–160 Hz and 54.16% in 160–500 Hz.
+- **Electric guitar:** -27.87 dBFS RMS; 57.15% in 2000–8000 Hz.
+- **Lead:** -22.86 dBFS RMS; 82.83% in 500–2000 Hz.
+
+This describes different spectral *roles* and possible low-band kick/bass overlap, not actual listener masking. **P7 engineering gate accepted**; any choice to rebalance EQ/levels remains musical-context work rather than a mandatory numerical target.
