@@ -111,7 +111,7 @@ def _target_gain(x:np.ndarray,db:float):
     return (x*gain).astype(np.float32),gain
 
 
-def process_stems(score:dict,raw:dict,with_effects=True)->tuple[np.ndarray,dict,dict]:
+def process_stems(score:dict,raw:dict,with_effects=True,room_predelay_ms=0.)->tuple[np.ndarray,dict,dict]:
     style=score['style'];bpm=score['bpm']
     frames=round(score['duration']*SR)
     kick_frames=[round(h['beat']*60/bpm*SR) for h in score['drums'] if h['kind']=='kick']
@@ -152,7 +152,7 @@ def process_stems(score:dict,raw:dict,with_effects=True)->tuple[np.ndarray,dict,
     if with_effects:
         reverb_send=sum(out[n]*weight for n,weight in {
             'acoustic':.42,'electric':.65,'piano':.63,'lead':.70,'drums':.22,'bass':.04}.items())
-        wet=room_send(reverb_send,wet={'harbor':.16,'after':.13,'silver':.27}[style])
+        wet=room_send(reverb_send,wet={'harbor':.16,'after':.13,'silver':.27}[style],predelay_ms=room_predelay_ms)
         mixed=dry+wet
     else: mixed=dry
     # Maintain sub-bass focus; mono at low frequencies, with stereo musical details.
@@ -171,7 +171,10 @@ def process_stems(score:dict,raw:dict,with_effects=True)->tuple[np.ndarray,dict,
 
 def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
            with_effects=True,guitar_performance=False,bass_performance=False,piano_performance=False,
-           rhythm_pocket=False,drum_dynamics=False,register_separation=False,melody_answer=False):
+           rhythm_pocket=False,drum_dynamics=False,register_separation=False,melody_answer=False,
+           room_predelay_ms=0.):
+    if not math.isfinite(room_predelay_ms) or not 0<=room_predelay_ms<=160:
+        raise ValueError('Room predelay must be 0–160 milliseconds')
     score=make(style);validate(score)
     performance_report=None
     if guitar_performance:
@@ -203,8 +206,9 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
         validate(score)
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     raw=instrument_stems(score,assets=assets,gm=gm)
-    mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects)
-    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '')
+    mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects,
+                                          room_predelay_ms=room_predelay_ms)
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -220,7 +224,8 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
           'rhythm_pocket':rhythm_report,
           'drum_dynamics':drum_report,
           'register_separation':register_report,
-          'melody_answer':melody_report,**diagnostics}
+          'melody_answer':melody_report,
+          'room_predelay_ms':room_predelay_ms,**diagnostics}
     (out/(stem+'.score.json')).write_text(json.dumps(score,indent=2))
     (out/(stem+'.metadata.json')).write_text(json.dumps(meta,indent=2))
     return mp3,meta
