@@ -2,7 +2,8 @@
 import unittest
 from copy import deepcopy
 from pathlib import Path
-from studio7.string_mapping import plan_guitar_samples
+from studio7.string_mapping import plan_guitar_samples,shape_harbor_bm_guitar
+from studio7.score import make,validate
 
 
 def source(zone,layer,pitch,name="C4"):
@@ -69,6 +70,33 @@ class StringMappingTests(unittest.TestCase):
         self.assertEqual(report["mapped_distinct_strums"],0)
         self.assertEqual(report["unmapped_strums"],1)
         self.assertEqual(report["remaining_intra_strum_string_conflicts"],3)
+
+    def test_targeted_b_minor_revoicing_keeps_harmony_and_non_guitar_parts(self):
+        source=make("harbor")
+        frozen=deepcopy(source)
+        shaped,report=shape_harbor_bm_guitar(source)
+        self.assertEqual(source,frozen)
+        self.assertEqual(report["chords_revoiced"],8)
+        self.assertEqual(report["notes_repitched"],24)
+        self.assertEqual(len(shaped["notes"]),len(source["notes"]))
+        self.assertEqual(shaped["drums"],source["drums"])
+        self.assertEqual(shaped["chords"],source["chords"])
+        self.assertTrue(validate(shaped)["validated"])
+        for old,new in zip(source["notes"],shaped["notes"]):
+            self.assertEqual((old["instrument"],old["beat"],old["length"],old["velocity"]),
+                             (new["instrument"],new["beat"],new["length"],new["velocity"]))
+            if old["instrument"]!="acoustic":
+                self.assertEqual(old,new)
+        first=[n for n in shaped["notes"] if n["instrument"]=="acoustic"
+               and 8<=n["beat"]<8.3]
+        self.assertEqual(sorted(n["pitch"] for n in first),[47,54,59,62])
+        self.assertEqual(sorted(n["pitch"]%12 for n in first),[2,6,11,11])
+
+    def test_unrelated_style_never_gets_guitar_octave_shift(self):
+        source=make("silver")
+        changed,report=shape_harbor_bm_guitar(source)
+        self.assertEqual(source,changed)
+        self.assertEqual(report["chords_revoiced"],0)
 
     def test_missing_regions_and_bad_velocity_are_rejected(self):
         with self.assertRaises(FileNotFoundError):
