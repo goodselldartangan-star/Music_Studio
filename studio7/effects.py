@@ -73,15 +73,32 @@ def _room_ir(seed=27,seconds=1.13):
         ir[round(at*SR)]+=val
     return ir
 
-def room_send(x:np.ndarray,wet=.11,ir_seconds=1.13):
-    """Stereo shared 'room' instead of unrelated reverbs glued onto each patch."""
-    if wet==0:return np.zeros_like(x)
+def room_send(x:np.ndarray,wet=.11,ir_seconds=1.13,predelay_ms=0.):
+    """Return wet-only stereo room with optional physical-style pre-delay.
+
+    The default (0ms pre-delay) preserves previous mixes. This adds no source
+    notes or artificial dry signal. The caller remains responsible for leaving
+    enough output-buffer space for the naturally decaying late reflections.
+    """
+    if x.ndim != 2 or x.shape[1] != 2 or not np.isfinite(x).all():
+        raise ValueError("Expected finite stereo audio")
+    if (not np.isfinite(wet) or not 0<=wet<=1 or
+        not np.isfinite(ir_seconds) or not .17<=ir_seconds<=4 or
+        not np.isfinite(predelay_ms) or not 0<=predelay_ms<=160):
+        raise ValueError("Invalid room wet, impulse duration or predelay")
+    if wet==0 or len(x)==0:return np.zeros_like(x)
     ir_l=_room_ir(43,ir_seconds);ir_r=_room_ir(101,ir_seconds)
     send=lowpass(highpass(x,220),6600)
+    shift=round(SR*predelay_ms/1000)
+    if shift:
+        delayed=np.zeros_like(send)
+        if shift<len(send):delayed[shift:]=send[:-shift]
+        send=delayed
     y=np.empty_like(x)
     y[:,0]=fftconvolve(send[:,0],ir_l,mode='full')[:len(x)]
     y[:,1]=fftconvolve(send[:,1],ir_r,mode='full')[:len(x)]
     return (wet*y).astype(np.float32)
+
 
 def saturate(x:np.ndarray,drive=1.11,wet=.18):
     """2x oversampled gentle saturation, deliberately not used on all stems."""
