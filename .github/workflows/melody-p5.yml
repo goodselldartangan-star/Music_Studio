@@ -1,0 +1,53 @@
+name: P5 motif and final-answer cadence — symbolic and audio checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/melody.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_melody_p5.py'
+      - 'tools/compare_melody_p5.py'
+      - '.github/workflows/melody-p5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  melodic-phrasing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local non-AI audio renderer
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Check motif identity, chord relations and register compatibility
+        run: |
+          python -m unittest tests.test_melody_p5 tests.test_registers_p4 tests.test_studio7 -v
+      - name: Render identical-patch final melody comparison
+        run: |
+          python -m tools.compare_melody_p5 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out p5-melody-preview --style after
+          ffmpeg -v error -xerror -i p5-melody-preview/P5_melody_before.mp3 -f null -
+          ffmpeg -v error -xerror -i p5-melody-preview/P5_melody_after.mp3 -f null -
+      - name: Full score optional melodic answer
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style after --melody-answer --out p5-melody-integrated
+          test -f p5-melody-integrated/after-v7-p5-answer.mp3
+          test -f p5-melody-integrated/verification_v7.json
+      - name: Save symbolic and audio evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: P5-Motif-and-Cadence-Technical-AB
+          path: |
+            p5-melody-preview/P5_melody_*.mp3
+            p5-melody-preview/P5_melody_report.json
+            p5-melody-integrated/verification_v7.json
+          retention-days: 90
