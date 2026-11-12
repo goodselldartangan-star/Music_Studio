@@ -8,6 +8,7 @@ on:
       - 'tests/test_effects_p6.py'
       - 'tests/test_mix_translation_p7.py'
       - 'tests/test_mix_stems_p7.py'
+      - 'tests/test_sections_p8.py'
       - 'tools/audit_mix_stems_p7.py'
       - 'tools/install_optional_v7.py'
       - 'tools/audit_sample_coverage.py'
@@ -198,6 +199,20 @@ jobs:
           assert (root/'after-v7-p7-mono.mp3').is_file()
           print('P7 optional center-preserving low-side filter passed recorded instrument QA')
           PY
+      - name: Verify P8 optional final-section breath with recorded instruments
+        run: |
+          python demo_v7.py --assets assets/v7 --style after --transition-breath --out v7-p8-after
+          python - <<'PY'
+          import json,pathlib
+          out=pathlib.Path('v7-p8-after')
+          r=json.loads((out/'verification_v7.json').read_text())[0]
+          m=r['metadata']
+          assert m['backend']=='recorded instruments'
+          assert m['transition_breath']['dropped_closed_hats']
+          assert r['audio_qa']['passed']
+          assert (out/'after-v7-p8-breath.mp3').exists()
+          print('P8 optional transition passed recorded-sample rendering; artistic preference not inferred')
+          PY
       - name: Retain all three listening demos and provenance
         uses: actions/upload-artifact@v4
         with:
@@ -216,6 +231,7 @@ jobs:
             v7-p5-after/verification_v7.json
             v7-p6-harbor/verification_v7.json
             v7-p7-after/verification_v7.json
+            v7-p8-after/verification_v7.json
             assets/v7/*provenance*.json
           retention-days: 90
       - name: Publish new release without rewriting older recordings
