@@ -24,17 +24,21 @@ def precise_mono_below(x:np.ndarray,cutoff:float=135)->np.ndarray:
     return y.astype(np.float32)
 
 
-def _band_side_fraction(x:np.ndarray,cutoff:float)->float:
+def _band_side_metrics(x:np.ndarray,cutoff:float)->tuple[float,float]:
     mid=(x[:,0].astype(np.float64)+x[:,1].astype(np.float64))*.5
     side=(x[:,0].astype(np.float64)-x[:,1].astype(np.float64))*.5
     length=min(len(x),32768)
     f,pm=welch(mid,SR,nperseg=length)
     _,ps=welch(side,SR,nperseg=length)
     mask=f<=cutoff
-    if np.count_nonzero(mask)<2:return 0.
+    if np.count_nonzero(mask)<2:return 0.,-240.
     pm_low=float(np.trapezoid(pm[mask],f[mask]))
     ps_low=float(np.trapezoid(ps[mask],f[mask]))
-    return float(ps_low/max(1e-20,ps_low+pm_low))
+    # The fraction alone is misleading when mid energy is zero (anti-phase).
+    # Record absolute side energy as RMS dBFS too.
+    fraction=float(ps_low/max(1e-20,ps_low+pm_low))
+    side_dbfs=10*math.log10(max(ps_low,1e-24))
+    return fraction,side_dbfs
 
 
 def mix_translation_metrics(x:np.ndarray,*,cutoff:float=150.,true_peak_rate:int=4)->dict:
@@ -61,13 +65,15 @@ def mix_translation_metrics(x:np.ndarray,*,cutoff:float=150.,true_peak_rate:int=
     mid=(x[:,0].astype(np.float64)+x[:,1].astype(np.float64))*.5
     mono_rms=float(np.sqrt(np.mean(mid**2)))
     full_rms=float(np.sqrt(np.mean(x.astype(np.float64)**2)))
+    fraction,side_dbfs=_band_side_metrics(x,cutoff)
     return {
         'sample_peak_dbfs':round(20*math.log10(max(sample_peak,1e-12)),3),
         'estimated_true_peak_dbfs':round(20*math.log10(max(best,1e-12)),3),
         'rms_dbfs':round(20*math.log10(max(full_rms,1e-12)),3),
         'balance_db':round(20*math.log10(max(rms_l,1e-12)/max(rms_r,1e-12)),3),
         'mono_rms_delta_db':round(20*math.log10(max(mono_rms,1e-12)/max(full_rms,1e-12)),3),
-        'low_side_fraction':round(_band_side_fraction(x,cutoff),6),
+        'low_side_fraction':round(fraction,6),
+        'low_side_rms_dbfs':round(side_dbfs,3),
         'low_side_cutoff_hz':cutoff,
         'limitations':'Technical peaks and band energy do not determine mix quality.'
     }
