@@ -1,0 +1,54 @@
+name: Q2 recorded guitar string-zone consistency — evidence gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audit_guitar_strings_q2.py'
+      - 'tests/test_guitar_strings_q2.py'
+      - '.github/workflows/q2-guitar-string-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guitar-source-mapping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline DSP environment
+        run: python -m pip install -r requirements.txt
+      - name: Test string label parsing and isolated guitar gesture grouping
+        run: python -m unittest tests.test_guitar_strings_q2 -v
+      - name: Fetch original licensed source files for actual physical string mapping
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .q2-downloads
+          gh release download meta-steel-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' --dir .q2-downloads
+          gh release download meta-nylon-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-nylon-guitar-ogg.zip' --dir .q2-downloads
+      - name: Verify publisher archive and unpack only audited steel and nylon samples
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from tools.install_cc0 import install_pack
+          from tools.install_optional_v7 import install_nylon
+          root=Path('assets/q2')
+          root.mkdir(parents=True,exist_ok=True)
+          print(install_pack('meta-steel-guitar',Path('.q2-downloads/meta-open-sound-meta-steel-guitar-ogg.zip'),root))
+          install_nylon(Path('.q2-downloads/meta-open-sound-meta-nylon-guitar-ogg.zip'),root)
+          PY
+      - name: Audit original Harbor and Silver string assignments without changing playback
+        run: |
+          python -m tools.audit_guitar_strings_q2 --assets assets/q2 --out q2-reports/legacy_guitar_string_assignments.json
+      - name: Preserve technical source mapping, not publisher recording bytes
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q2-Guitar-Legacy-Physical-String-Audit
+          path: q2-reports/legacy_guitar_string_assignments.json
+          retention-days: 90
