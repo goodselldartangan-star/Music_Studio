@@ -15,8 +15,10 @@ class TranslationTests(unittest.TestCase):
         y=precise_mono_below(x,150)
         orig=mix_translation_metrics(x)
         new=mix_translation_metrics(y)
+        # A fully anti-phase signal has zero mid power, so its side *fraction*
+        # remains 1.0 even as absolute low-side energy becomes nearly silent.
         self.assertGreater(orig['low_side_fraction'],.98)
-        self.assertLess(new['low_side_fraction'],.02)
+        self.assertLess(new['low_side_rms_dbfs'],orig['low_side_rms_dbfs']-25)
         self.assertLess(float(np.sqrt(np.mean(y**2))),float(np.sqrt(np.mean(x**2)))*.03)
 
     def test_center_channel_is_preserved_sample_by_sample(self):
