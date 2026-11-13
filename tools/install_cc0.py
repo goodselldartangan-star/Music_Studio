@@ -24,6 +24,16 @@ PINNED_SHA256 = {
     'meta-piano': '4ba8095f5c2a70396d14f3b9c563f6c9010a093893159bad50e83145e1c35d40',
 }
 
+# Publisher replaced the piano OGG asset under the SAME release tag on
+# 2026-11-12. Preserve the old content pin and admit only the new GitHub
+# publisher-declared checksum, noting the exact version in the manifest.
+ADDITIONAL_VERIFIED_SHA256 = {
+    'meta-piano': {
+        '6a021b55cb2dcb0c4a2909cf8350d466b723e56eae44d1e5d9f41b31d6639b58': 'publisher-updated-2026-11-12'
+    }
+}
+
+
 
 def download_pack(kind: str, cache: Path) -> Path:
     tag, filename, limit = PACKS[kind]
@@ -57,8 +67,13 @@ def install_pack(kind: str, archive: Path, dest: Path) -> dict:
     if archive.stat().st_size > max_bytes:
         raise ValueError('Archive size outside publisher bounds')
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    if archive.name == filename and digest != PINNED_SHA256[kind]:
+    allowed = {PINNED_SHA256[kind], *ADDITIONAL_VERIFIED_SHA256.get(kind, {})}
+    if archive.name == filename and digest not in allowed:
         raise ValueError(f'Publisher archive checksum changed for {kind}; inspect source before using')
+    archive_revision = (
+        'historically-verified' if digest == PINNED_SHA256[kind]
+        else ADDITIONAL_VERIFIED_SHA256.get(kind, {}).get(digest, 'custom-provided')
+    )
     target = dest / kind
     target.mkdir(parents=True, exist_ok=True)
     count = 0
@@ -81,7 +96,7 @@ def install_pack(kind: str, archive: Path, dest: Path) -> dict:
         raise ValueError(f'No OGG sample files in {archive}')
     return {'collection': kind, 'license': 'CC0-1.0', 'release_tag': tag,
             'asset': filename, 'files': count,
-            'download_sha256': digest}
+            'download_sha256': digest, 'archive_revision': archive_revision}
 
 
 def main():
