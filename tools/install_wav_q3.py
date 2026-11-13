@@ -82,14 +82,17 @@ def install_archive(kind:str,archive:Path,root:Path,*,strict=True)->dict:
 
 def main():
     p=argparse.ArgumentParser()
-    p.add_argument('--steel',type=Path,required=True)
-    p.add_argument('--piano',type=Path,required=True)
-    p.add_argument('--nylon',type=Path,required=True)
+    p.add_argument('--steel',type=Path)
+    p.add_argument('--piano',type=Path)
+    p.add_argument('--nylon',type=Path)
     p.add_argument('--out',type=Path,required=True)
     a=p.parse_args()
-    reports=[]
-    for kind,archive in (('meta-steel-guitar',a.steel),('meta-piano',a.piano),('meta-nylon-guitar',a.nylon)):
-        reports.append(install_archive(kind,archive,a.out))
+    chosen=[(kind,archive) for kind,archive in
+            (('meta-steel-guitar',a.steel),('meta-piano',a.piano),('meta-nylon-guitar',a.nylon))
+            if archive is not None]
+    if not chosen:
+        p.error('Specify at least one verified stereo WAV archive')
+    reports=[install_archive(kind,archive,a.out) for kind,archive in chosen]
     manifest={'source_release_tags':{'meta-steel-guitar':'meta-steel-guitar-v1.0.0',
         'meta-piano':'meta-piano-v1.0.0','meta-nylon-guitar':'meta-nylon-guitar-v1.0.0'},
         'collections':reports}
