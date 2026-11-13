@@ -13,6 +13,7 @@ from .effects import highpass,lowpass,room_send,tap_delay,subtle_chorus,tremolo,
 from studio6.soundfonts import FluidSynth,render_sf2
 from .articulation import render_polyphonic,render_meta_note
 from .samples import Collection
+from .stereo_wav_q3 import render_stereo_wav_note
 from .playing import shape_strums
 from .bass_performance import shape_bass
 from .piano_performance import shape_piano
@@ -49,7 +50,7 @@ def _render_with_gm(path:Path,notes:list[dict],seconds:float,bpm:int,part:str):
     finally: fs.close()
 
 
-def _sample_meta(score:dict,part:str,assets:Path,*,string_aware=False):
+def _sample_meta(score:dict,part:str,assets:Path,*,string_aware=False,stereo_wav=False):
     # Reuse the existing CC0 Meta sampler; that module owns sample parsing.
     from studio3.sample_bank import SampleBank
     from studio3.spec import Note
@@ -61,11 +62,17 @@ def _sample_meta(score:dict,part:str,assets:Path,*,string_aware=False):
         selected=(plan_guitar_samples(acoustic,collection.regions,seed_base=score['bars']*43)[0]
                   if string_aware else None)
         for i,n in enumerate(acoustic):
-            raw=collection.render(n['pitch'],n['velocity'],n['length'],score['bpm'],
-                                  i+int(n['beat']*100),
-                                  region=selected[i] if selected is not None else None)
+            seed=i+int(n['beat']*100)
+            if stereo_wav:
+                region=selected[i] if selected is not None else collection.select_region(n['pitch'],n['velocity'],seed)
+                raw=render_stereo_wav_note(region[0],region[1],n['pitch'],n['velocity'],
+                                           n['length'],score['bpm'],kind='nylon')
+            else:
+                raw=collection.render(n['pitch'],n['velocity'],n['length'],score['bpm'],
+                                      seed,region=selected[i] if selected is not None else None)
             st=round(n['beat']*60/score['bpm']*SR);en=min(frames,st+len(raw))
-            if en>st:dest[st:en]+=raw[:en-st,None]*.7071
+            if en>st:
+                dest[st:en]+=(raw[:en-st] if stereo_wav else raw[:en-st,None])*.7071
         return dest
     key={'acoustic':'pluck','piano':'keys'}[part]
     if not bank.has(key):raise FileNotFoundError(f'Missing CC0 {key} samples in {assets}')
@@ -75,21 +82,29 @@ def _sample_meta(score:dict,part:str,assets:Path,*,string_aware=False):
               if string_aware and part=='acoustic' else None)
     for i,n in enumerate(active):
         voice=Note(key,n['beat'],n['length'],n['pitch'],n['velocity']/127,0)
-        raw=render_meta_note(bank,voice,score['bpm'],score['bars']*43+i,
-                             region=selected[i] if selected is not None else None)
+        if stereo_wav:
+            region=selected[i] if selected is not None else bank._select(voice,score['bars']*43+i)
+            raw=render_stereo_wav_note(region.path,region.midi,n['pitch'],n['velocity'],
+                                       n['length'],score['bpm'],
+                                       kind='steel' if part=='acoustic' else 'piano')
+        else:
+            raw=render_meta_note(bank,voice,score['bpm'],score['bars']*43+i,
+                                 region=selected[i] if selected is not None else None)
         start=round(n['beat']*60/score['bpm']*SR)
         end=min(frames,start+len(raw))
         if end>start:
-            dest[start:end,:]+=raw[:end-start,None]*.7071
+            dest[start:end,:]+=(raw[:end-start] if stereo_wav else raw[:end-start,None])*.7071
     return dest
 
 
-def instrument_stems(score:dict,assets:Path|None=None,gm:Path|None=None,*,guitar_string_mapping=False)->dict:
+def instrument_stems(score:dict,assets:Path|None=None,gm:Path|None=None,*,guitar_string_mapping=False,wav_source_root:Path|None=None)->dict:
     """Real backend: v6 downloaded CC0/CC-BY soundfonts + Meta samples.
     Portable offline fallback: system GM SoundFont only, explicitly labeled.
     """
     if assets is None and gm is None:raise ValueError('Choose real sampled assets or local GM fallback')
     if assets is not None and gm is not None:raise ValueError('Do not mix backends implicitly')
+    if wav_source_root is not None and (gm is not None or assets is None):
+        raise ValueError('WAV source root requires the existing recorded-instrument backend')
     out={}
     notes=score['notes'];dur=score['duration'];bpm=score['bpm']
     for name in ('bass','acoustic','electric','piano','lead'):
@@ -100,7 +115,10 @@ def instrument_stems(score:dict,assets:Path|None=None,gm:Path|None=None,*,guitar
         if gm:
             out[name]=_render_with_gm(gm,active,dur,bpm,name)
         elif name in ('acoustic','piano'):
-            out[name]=_sample_meta(score,name,assets,string_aware=(name=='acoustic' and guitar_string_mapping))
+            sample_root=wav_source_root if wav_source_root is not None else assets
+            out[name]=_sample_meta(score,name,sample_root,
+                                   string_aware=(name=='acoustic' and guitar_string_mapping),
+                                   stereo_wav=wav_source_root is not None)
         else:
             font=assets/'sf2'/('bass_picked.sf2' if name=='bass' and score['style']=='after' else f'{"electric" if name=="lead" else name}.sf2')
             out[name]=render_polyphonic(font,active,dur,bpm,part=name,program=0)
@@ -185,7 +203,7 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
            with_effects=True,guitar_performance=False,bass_performance=False,piano_performance=False,
            rhythm_pocket=False,drum_dynamics=False,register_separation=False,melody_answer=False,
            room_predelay_ms=0.,precise_low_mono=False,transition_breath=False,
-           guitar_string_mapping=False):
+           guitar_string_mapping=False,wav_source_root:Path|None=None):
     if not math.isfinite(room_predelay_ms) or not 0<=room_predelay_ms<=160:
         raise ValueError('Room predelay must be 0–160 milliseconds')
     score=make(style);validate(score)
@@ -227,11 +245,12 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
         validate(score)
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     raw=instrument_stems(score,assets=assets,gm=gm,
-                         guitar_string_mapping=guitar_string_mapping)
+                         guitar_string_mapping=guitar_string_mapping,
+                         wav_source_root=wav_source_root)
     mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects,
                                           room_predelay_ms=room_predelay_ms,
                                           precise_low_mono=precise_low_mono)
-    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '') + ('-p8-breath' if transition_breath else '') + ('-q2-strings' if guitar_string_mapping else '')
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '') + ('-p8-breath' if transition_breath else '') + ('-q2-strings' if guitar_string_mapping else '') + ('-q3-stereo-wav' if wav_source_root is not None else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -252,7 +271,8 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
           'precise_low_mono':precise_low_mono,
           'transition_breath':transition_report,
           'guitar_string_mapping':guitar_string_mapping,
-          'guitar_voicing':string_voicing_report,**diagnostics}
+          'guitar_voicing':string_voicing_report,
+          'source_quality':'stereo-24bit-wav' if wav_source_root is not None else 'original-ogg-or-gm',**diagnostics}
     (out/(stem+'.score.json')).write_text(json.dumps(score,indent=2))
     (out/(stem+'.metadata.json')).write_text(json.dumps(meta,indent=2))
     return mp3,meta
