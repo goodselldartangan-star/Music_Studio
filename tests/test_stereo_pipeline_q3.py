@@ -29,10 +29,12 @@ class StereoIntegrationTests(unittest.TestCase):
         for base in (self.ogg,self.wav):
             (base/'meta-piano').mkdir(parents=True)
             (base/'meta-nylon-guitar').mkdir(parents=True)
+            (base/'meta-steel-guitar').mkdir(parents=True)
         audio=recording()
         for library,filename in (
             ('meta-piano','INSPiano_Vel01_C4_01'),
-            ('meta-nylon-guitar','INSGuitarNylon_StringA_Vel01Finger_E2_01')
+            ('meta-nylon-guitar','INSGuitarNylon_StringA_Vel01Finger_E2_01'),
+            ('meta-steel-guitar','INSGuitarSteel_StringLowE_Vel01_E2_01')
         ):
             sf.write(self.wav/library/(filename+'.wav'),audio,48000,subtype='PCM_24')
             sf.write(self.ogg/library/(filename+'.ogg'),audio.mean(axis=1),48000,
@@ -67,6 +69,21 @@ class StereoIntegrationTests(unittest.TestCase):
         self.assertEqual(stereo.shape,old.shape)
         self.assertGreater(float(np.max(abs(stereo[:,0]-stereo[:,1]))),.0001)
         self.assertGreater(float(np.max(abs(stereo[round(.55*60/110*SR):]))),.00001)
+
+    def test_piano_only_stereo_keeps_original_acoustic_ogg_exact(self):
+        # No guitar WAV library is required for the optional piano-only path.
+        for path in (self.wav/'meta-steel-guitar').glob('*.wav'):
+            path.unlink()
+        score={'style':'harbor','bars':16,'duration':3.,'bpm':120,'drums':[],
+               'notes':[dict(instrument='acoustic',pitch=40,beat=.1,length=.9,velocity=75),
+                        dict(instrument='piano',pitch=60,beat=.3,length=1.1,velocity=70)]}
+        baseline=instrument_stems(score,assets=self.ogg)
+        changed=instrument_stems(score,assets=self.ogg,wav_source_root=self.wav,wav_parts='piano')
+        np.testing.assert_array_equal(baseline['acoustic'],changed['acoustic'])
+        self.assertGreater(float(np.max(abs(changed['piano'][:,0]-changed['piano'][:,1]))),.0001)
+        self.assertLess(float(np.max(abs(baseline['piano'][:,0]-baseline['piano'][:,1]))),1e-8)
+        with self.assertRaises(ValueError):
+            instrument_stems(score,assets=self.ogg,wav_parts='piano')
 
     def test_wav_source_cannot_be_silently_used_with_gm(self):
         score={'style':'after','bars':16,'duration':1.,'bpm':120,'notes':[],'drums':[]}
