@@ -24,6 +24,7 @@ def main():
     p.add_argument('--transition-breath',action='store_true',help='P8 optional backing pause before returning final section')
     p.add_argument('--guitar-string-mapping',action='store_true',help='Q2 optional physically mapped recorded guitar chord strings')
     p.add_argument('--wav-source-root',type=Path,help='Q3 optional separate original stereo 24-bit WAV instrument folder')
+    p.add_argument('--wav-parts',choices=['all','piano','acoustic'],default='all',help='Q3 optionally use stereo WAV for piano alone, acoustic alone, or both')
     a=p.parse_args();results=[]
     for style in ([a.style] if a.style else SONGS):
         mp3,meta=render(style,a.out,assets=a.assets,gm=a.gm,guitar_performance=a.guitar_performance,
@@ -37,7 +38,8 @@ def main():
                         precise_low_mono=a.precise_low_mono,
                         transition_breath=a.transition_breath,
                         guitar_string_mapping=a.guitar_string_mapping,
-                        wav_source_root=a.wav_source_root)
+                        wav_source_root=a.wav_source_root,
+                        wav_parts=a.wav_parts)
         report=inspect(mp3)
         results.append({'metadata':meta,'audio_qa':report})
     (a.out/'verification_v7.json').write_text(json.dumps(results,indent=2))
