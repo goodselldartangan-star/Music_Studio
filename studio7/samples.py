@@ -23,21 +23,31 @@ class Collection:
             match=NOTE_PATTERN.search(p.name)
             if match:self.regions.append((p,midi_from_name(match[2]),int(match[1])))
         if not self.regions:raise FileNotFoundError(f'No {name} recorded samples under {root/name}')
-    def render(self,pitch:int,velocity:int,length:float,bpm:int,seed:int,*,region=None):
-        if not 0<velocity<128 or length<=0:raise ValueError('Invalid MIDI note')
+    def candidates(self,pitch:int,velocity:int):
+        """Equivalent-pitch/velocity source files, including physical string choices."""
+        if not 1<=velocity<=127:raise ValueError('Invalid MIDI note velocity')
         maxlayer=max(x[2] for x in self.regions)
         goal=math.ceil(velocity/127*maxlayer)
         d=min((abs(p-pitch),abs(layer-goal)) for _,p,layer in self.regions)
-        candidates=[x for x in self.regions if (abs(x[1]-pitch),abs(x[2]-goal))==d]
         if d[0]>4:raise ValueError(f'{self.name}: pitch {pitch} is outside sampled range')
-        # Take identity is independent of duration, so articulation A/B keeps the same recording.
+        return [x for x in self.regions if (abs(x[1]-pitch),abs(x[2]-goal))==d],goal
+
+    def select_region(self,pitch:int,velocity:int,seed:int):
+        """Stable take choice without note length or start-time in its identity."""
+        candidates,goal=self.candidates(pitch,velocity)
+        ix=int(hashlib.sha256(f'{seed}:{pitch}:{goal}'.encode()).hexdigest()[:8],16)%len(candidates)
+        return candidates[ix]
+
+    def render(self,pitch:int,velocity:int,length:float,bpm:int,seed:int,*,region=None):
+        if not 0<velocity<128 or length<=0:raise ValueError('Invalid MIDI note')
+        candidates,goal=self.candidates(pitch,velocity)
         if region is not None:
             if region not in candidates:
                 raise ValueError("Requested recorded string is not a valid pitch/velocity-layer candidate")
             path,base,_=region
         else:
-            ix=int(hashlib.sha256(f'{seed}:{pitch}:{goal}'.encode()).hexdigest()[:8],16)%len(candidates)
-            path,base,_=candidates[ix]
+            # Keep the exact historical take-selection behavior.
+            path,base,_=self.select_region(pitch,velocity,seed)
         sample=_resampled(path,base,pitch)
         duration=length*60/bpm
         out=smooth_release(sample,duration,part='acoustic',sr=SR)
