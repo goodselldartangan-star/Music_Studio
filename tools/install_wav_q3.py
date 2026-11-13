@@ -16,6 +16,15 @@ SOURCES={
     'meta-nylon-guitar': ('meta-open-sound-meta-nylon-guitar-wav.zip',348,423127309),
 }
 
+# Exact SHA256 values published by the official GitHub Release asset API.
+# Byte size alone does not establish that an archive is authentic.
+EXPECTED_SHA256={
+    'meta-steel-guitar':'caaa8a9c07217f4a82d1dfd9f5657c286155464b66bf4dd27797811c2558a909',
+    'meta-piano':'0536f29ea2342fe63571d3031e9c8edde2558f6abf7f31ebc866dee3a635bf60',
+    'meta-nylon-guitar':'e7fa168b97a72ecc1257917f85cb524fe7c2e1f098dfdcaf8f5c0e29cabe768e',
+}
+
+
 
 def install_archive(kind:str,archive:Path,root:Path,*,strict=True)->dict:
     if kind not in SOURCES:raise ValueError('Unknown original WAV collection')
@@ -24,6 +33,13 @@ def install_archive(kind:str,archive:Path,root:Path,*,strict=True)->dict:
     if not archive.is_file():raise FileNotFoundError(archive)
     if strict and (archive.name!=filename or archive.stat().st_size!=bytes_expected):
         raise ValueError(f'Unexpected published archive identity/size for {kind}')
+    digest=hashlib.sha256()
+    with archive.open('rb') as source:
+        for chunk in iter(lambda:source.read(1024*1024),b''):
+            digest.update(chunk)
+    checksum=digest.hexdigest()
+    if strict and checksum!=EXPECTED_SHA256[kind]:
+        raise ValueError(f'Publisher original WAV checksum mismatch: {kind}')
     root=Path(root);root.mkdir(parents=True,exist_ok=True)
     target=root/kind
     if target.exists():
@@ -57,12 +73,8 @@ def install_archive(kind:str,archive:Path,root:Path,*,strict=True)->dict:
     except Exception:
         shutil.rmtree(temporary,ignore_errors=True)
         raise
-    digest=hashlib.sha256()
-    with archive.open('rb') as source:
-        for chunk in iter(lambda:source.read(1024*1024),b''):
-            digest.update(chunk)
     return {'source':'facebookincubator/Meta-open-sound','collection':kind,
-            'license':'CC0-1.0','archive':archive.name,'sha256':digest.hexdigest(),
+            'license':'CC0-1.0','archive':archive.name,'sha256':checksum,
             'archives_bytes':archive.stat().st_size,'sample_count':len(used),
             'format':'WAV PCM_24 stereo 48kHz',
             'note':'Installed separately; no existing OGG samples or MP3s replaced'}
