@@ -1,0 +1,93 @@
+name: Q3 WAV master vs OGG preview — matched source research
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audit_wav_ogg_q3.py'
+      - 'tests/test_wav_ogg_q3.py'
+      - '.github/workflows/q3-master-source-compare.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pairing-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test exact paired recordings, stereo and mismatched performances
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_wav_ogg_q3 -v
+
+  publisher-master-research:
+    needs: pairing-fixtures
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: steel
+            tag: meta-steel-guitar-v1.0.0
+            ogg: meta-open-sound-meta-steel-guitar-ogg.zip
+            wav: meta-open-sound-meta-steel-guitar-wav.zip
+            count: 375
+          - label: piano
+            tag: meta-piano-v1.0.0
+            ogg: meta-open-sound-meta-piano-ogg.zip
+            wav: meta-open-sound-meta-piano-wav.zip
+            count: 352
+          - label: nylon
+            tag: meta-nylon-guitar-v1.0.0
+            ogg: meta-open-sound-meta-nylon-guitar-ogg.zip
+            wav: meta-open-sound-meta-nylon-guitar-wav.zip
+            count: 348
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline audio readers
+        run: python -m pip install -r requirements.txt
+      - name: Download original tagged open-source publisher assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .q3-archives
+          gh release download '${{ matrix.tag }}' --repo facebookincubator/Meta-open-sound --pattern '${{ matrix.ogg }}' --dir .q3-archives
+          gh release download '${{ matrix.tag }}' --repo facebookincubator/Meta-open-sound --pattern '${{ matrix.wav }}' --dir .q3-archives
+          sha256sum '.q3-archives/${{ matrix.ogg }}' '.q3-archives/${{ matrix.wav }}' > Q3_${{ matrix.label }}_sha256.txt
+      - name: Read paired note attacks, channels and codec differences without extracting source files
+        run: |
+          python -m tools.audit_wav_ogg_q3 \
+            --ogg '.q3-archives/${{ matrix.ogg }}' \
+            --wav '.q3-archives/${{ matrix.wav }}' \
+            --max-pairs 12 \
+            --out 'Q3_${{ matrix.label }}_source_comparison.json'
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('Q3_${{ matrix.label }}_source_comparison.json').read_text())
+          assert report['ogg_file_count']==${{ matrix.count }}, 'Unexpected OGG inventory'
+          print('Exact filename pairs:',report['same_filename_pairs'])
+          print('Candidate same-take correlation:',report['candidate_same_take_count'],'/',report['checked_pair_count'])
+          print('WAV channels:',report['wav_channel_counts'])
+          print('OGG channels:',report['ogg_channel_counts'])
+          print('No source or released songs were altered.')
+          PY
+      - name: Archive compact comparison and source hashes only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q3-${{ matrix.label }}-Master-Preview-Report
+          path: |
+            Q3_${{ matrix.label }}_source_comparison.json
+            Q3_${{ matrix.label }}_sha256.txt
+          retention-days: 90
