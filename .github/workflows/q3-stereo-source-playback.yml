@@ -1,0 +1,98 @@
+name: Q3 optional stereo WAV playback — preserved defaults and real audio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/stereo_wav_q3.py'
+      - 'studio7/render.py'
+      - 'studio7/samples.py'
+      - 'demo_v7.py'
+      - 'tools/install_wav_q3.py'
+      - 'tools/compare_stereo_wav_q3.py'
+      - 'tests/test_stereo_wav_q3.py'
+      - 'tests/test_stereo_pipeline_q3.py'
+      - 'tests/test_install_wav_q3.py'
+      - '.github/workflows/q3-stereo-source-playback.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-and-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline DSP and sample readers
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3 timgm6mb-soundfont
+      - name: Q3 stereo, source archive safety and original playback contracts
+        run: |
+          python -m unittest tests.test_stereo_wav_q3 tests.test_stereo_pipeline_q3 tests.test_install_wav_q3 tests.test_sample_take_identity tests.test_string_mapping_q2 tests.test_articulation -v
+
+  real-stereo-comparison:
+    needs: unit-and-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local DSP, FFmpeg and soundfont dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Download exact public CC0 original master and preview archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p q3-archives
+          gh release download meta-piano-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-piano-ogg.zip' --dir q3-archives
+          gh release download meta-piano-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-piano-wav.zip' --dir q3-archives
+          gh release download meta-steel-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' --dir q3-archives
+          gh release download meta-steel-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-steel-guitar-wav.zip' --dir q3-archives
+          gh release download meta-nylon-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-nylon-guitar-ogg.zip' --dir q3-archives
+          gh release download meta-nylon-guitar-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-nylon-guitar-wav.zip' --dir q3-archives
+      - name: Preserve original OGG sampler tier untouched
+        run: |
+          python tools/install_cc0.py --no-download \
+            --guitar-zip q3-archives/meta-open-sound-meta-steel-guitar-ogg.zip \
+            --piano-zip q3-archives/meta-open-sound-meta-piano-ogg.zip \
+            --out assets/q3-original-ogg
+          python - <<'PY'
+          from pathlib import Path
+          from tools.install_optional_v7 import install_nylon
+          install_nylon(Path('q3-archives/meta-open-sound-meta-nylon-guitar-ogg.zip'),Path('assets/q3-original-ogg'))
+          PY
+      - name: Install original stereo WAV into separate directory with strict checks
+        run: |
+          python -m tools.install_wav_q3 \
+            --steel q3-archives/meta-open-sound-meta-steel-guitar-wav.zip \
+            --piano q3-archives/meta-open-sound-meta-piano-wav.zip \
+            --nylon q3-archives/meta-open-sound-meta-nylon-guitar-wav.zip \
+            --out assets/q3-stereo-wav
+      - name: Verify real OGG and stereo WAV overlap, channels, and matched-level phrase
+        run: |
+          python -m tools.compare_stereo_wav_q3 \
+            --ogg-assets assets/q3-original-ogg --wav-assets assets/q3-stereo-wav --out q3-compare
+          for audio in q3-compare/Q3_*.mp3; do ffmpeg -v error -xerror -i "$audio" -f null -; done
+      - name: Keep only evidence and short A/B audio, not publisher source archives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q3-Real-Stereo-vs-OGG-Short-Technical-AB
+          path: |
+            q3-compare/Q3_*.mp3
+            q3-compare/Q3_short_comparison.json
+            assets/q3-stereo-wav/wav_provenance.json
+            assets/q3-original-ogg/provenance.json
+          retention-days: 90
