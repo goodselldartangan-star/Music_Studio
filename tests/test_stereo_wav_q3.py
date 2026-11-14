@@ -37,6 +37,16 @@ class StereoWavTests(unittest.TestCase):
                                    held[offset:offset+len(struck)]+struck)
         self.assertGreater(float(np.max(abs(mix[offset:offset+100]-held[offset:offset+100]))),0)
 
+    def test_stereo_release_preserves_independent_channel_tails(self):
+        short=render_stereo_wav_note(self.path,57,57,80,.24,120,kind='piano')
+        long=render_stereo_wav_note(self.path,57,57,80,.8,120,kind='piano')
+        attack=round(.10*SR)
+        np.testing.assert_array_equal(short[:attack],long[:attack])
+        self.assertGreater(float(np.max(np.abs(short[:,0]-short[:,1]))),.0001)
+        self.assertGreater(float(np.max(np.abs(long[:,0]-long[:,1]))),.0001)
+        self.assertTrue(np.isfinite(short).all())
+        self.assertTrue(np.isfinite(long).all())
+
     def test_excessive_retuning_or_mono_source_is_rejected(self):
         with self.assertRaises(ValueError):render_stereo_wav_note(self.path,57,65,90,.5,120,kind='steel')
         mono=self.root/'mono.wav'
