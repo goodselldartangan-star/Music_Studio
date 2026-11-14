@@ -1,0 +1,60 @@
+name: Q4 piano note-off timing — scoped pedal windows and real-audio QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/pedal_timing.py'
+      - 'studio7/render.py'
+      - 'demo_v7.py'
+      - 'tests/test_pedal_timing_q4.py'
+      - 'tools/compare_pedal_q4.py'
+      - '.github/workflows/q4-pedal-timing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  piano-pedal-timing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline piano renderer and soundfont
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3 timgm6mb-soundfont ffmpeg
+      - name: Pedal note-off intervals and earlier polyphony regressions
+        run: |
+          python -m unittest tests.test_pedal_timing_q4 tests.test_piano_performance_p2 tests.test_articulation tests.test_stereo_wav_q3 -v
+      - name: Compare piano note-off behavior with untouched dry intro
+        run: |
+          python -m tools.compare_pedal_q4 --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --out q4-pedal-preview
+          ffmpeg -v error -xerror -i q4-pedal-preview/Q4_pedal_before.mp3 -f null -
+          ffmpeg -v error -xerror -i q4-pedal-preview/Q4_pedal_after.mp3 -f null -
+      - name: Verify integrated Silver optional MP3 only
+        run: |
+          python demo_v7.py --gm /usr/share/sounds/sf2/TimGM6mb.sf2 --style silver --piano-pedal-timing --out q4-integrated
+          test -f q4-integrated/silver-v7-q4-pedal-timing.mp3
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('q4-integrated/verification_v7.json').read_text())[0]
+          assert r['audio_qa']['passed']
+          assert r['metadata']['piano_pedal_timing']['piano_notes_held_past_key_release']>0
+          assert r['metadata']['piano_pedal_timing']['true_pedal_mechanism_or_string_resonance'] is False
+          PY
+      - name: Archive controlled comparisons only
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q4-Piano-NoteOff-Timing-Comparison
+          path: |
+            q4-pedal-preview/Q4_pedal_*.mp3
+            q4-pedal-preview/Q4_pedal_timing_report.json
+            q4-integrated/verification_v7.json
+          retention-days: 90
