@@ -17,6 +17,7 @@ from .stereo_wav_q3 import render_stereo_wav_note
 from .playing import shape_strums
 from .bass_performance import shape_bass
 from .piano_performance import shape_piano
+from .pedal_timing import shape_silver_pedal_timing
 from .rhythm import shape_pocket
 from .drum_dynamics import shape_drum_dynamics
 from .registers import separate_lead_piano
@@ -207,7 +208,8 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
            with_effects=True,guitar_performance=False,bass_performance=False,piano_performance=False,
            rhythm_pocket=False,drum_dynamics=False,register_separation=False,melody_answer=False,
            room_predelay_ms=0.,precise_low_mono=False,transition_breath=False,
-           guitar_string_mapping=False,wav_source_root:Path|None=None,wav_parts='all'):
+           guitar_string_mapping=False,wav_source_root:Path|None=None,wav_parts='all',
+           piano_pedal_timing=False):
     if not math.isfinite(room_predelay_ms) or not 0<=room_predelay_ms<=160:
         raise ValueError('Room predelay must be 0–160 milliseconds')
     score=make(style);validate(score)
@@ -222,6 +224,10 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
     piano_report=None
     if piano_performance:
         score,piano_report=shape_piano(score)
+        validate(score)
+    pedal_report=None
+    if piano_pedal_timing:
+        score,pedal_report=shape_silver_pedal_timing(score)
         validate(score)
     rhythm_report=None
     if rhythm_pocket:
@@ -254,7 +260,7 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
     mix,stems,diagnostics=process_stems(score,raw,with_effects=with_effects,
                                           room_predelay_ms=room_predelay_ms,
                                           precise_low_mono=precise_low_mono)
-    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '') + ('-p8-breath' if transition_breath else '') + ('-q2-strings' if guitar_string_mapping else '') + (('-q3-stereo-wav' if wav_parts=='all' else f'-q3-stereo-{wav_parts}') if wav_source_root is not None else '')
+    stem=f'{style}-v7' + ('-p2-guitar' if guitar_performance else '') + ('-p2-bass' if bass_performance else '') + ('-p2-piano' if piano_performance else '') + ('-p3-pocket' if rhythm_pocket else '') + ('-p3-drums' if drum_dynamics else '') + ('-p4-register' if register_separation else '') + ('-p5-answer' if melody_answer else '') + (f'-p6-room{int(room_predelay_ms)}ms' if room_predelay_ms else '') + ('-p7-mono' if precise_low_mono else '') + ('-p8-breath' if transition_breath else '') + ('-q2-strings' if guitar_string_mapping else '') + (('-q3-stereo-wav' if wav_parts=='all' else f'-q3-stereo-{wav_parts}') if wav_source_root is not None else '') + ('-q4-pedal-timing' if piano_pedal_timing else '')
     wav=out/(stem+'.wav');mp3=out/(stem+'.mp3')
     sf.write(wav,mix,SR,subtype='PCM_24')
     subprocess.run(['ffmpeg','-nostdin','-hide_banner','-v','error','-y','-i',str(wav),
@@ -267,6 +273,7 @@ def render(style:str,out:Path,assets:Path|None=None,gm:Path|None=None,
           'guitar_performance':performance_report,
           'bass_performance':bass_report,
           'piano_performance':piano_report,
+          'piano_pedal_timing':pedal_report,
           'rhythm_pocket':rhythm_report,
           'drum_dynamics':drum_report,
           'register_separation':register_report,
