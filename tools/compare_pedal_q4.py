@@ -23,7 +23,9 @@ def _rms(a):
     return float(np.sqrt(np.mean(a.astype(np.float64)**2)))
 
 
-def run(gm:Path,out:Path)->dict:
+def run(gm:Path|None,out:Path,*,assets:Path|None=None)->dict:
+    if (gm is None)==(assets is None):
+        raise ValueError('Select exactly one piano test backend')
     base=make('silver')
     candidate,performance=shape_silver_pedal_timing(base)
     if not performance['piano_notes_held_past_key_release']:
@@ -32,7 +34,11 @@ def run(gm:Path,out:Path)->dict:
     audio={}
     for name,score in (('before',base),('after',candidate)):
         notes=[n for n in score['notes'] if n['instrument']=='piano']
-        audio[name]=render_polyphonic(gm,notes,seconds,base['bpm'],part='piano',program=0)
+        if assets is None:
+            audio[name]=render_polyphonic(gm,notes,seconds,base['bpm'],part='piano',program=0)
+        else:
+            from studio7.render import _sample_meta
+            audio[name]=_sample_meta(score,'piano',assets)
         if not np.isfinite(audio[name]).all():
             raise AssertionError('Invalid piano waveform')
     onset=round(32*60/base['bpm']*SR)
@@ -65,12 +71,13 @@ def run(gm:Path,out:Path)->dict:
     if abs(matched)>.6:
         raise AssertionError('Preview is not loudness matched')
     report={'experiment':'Q4 limited CC64-style note-off deferral, no physical pedal resonance',
+            'backend':'publisher Meta Piano OGG' if assets is not None else 'GM SoundFont fixture',
             'piano_performance':performance,
             'initial_audio_difference_rms':round(earlier,9),
             'entire_audio_difference_rms':round(full_change,8),
             'level_matched_piano_excerpt':stats,
             'excerpt_rms_difference_db':round(matched,2),
-            'limitations':'Original GM SoundFont fixture; musical pedal taste and real pedal noises unverified.'}
+            'limitations':'Only note-off timing; true damper, sympathetic resonance and pedal mechanisms remain unmodeled.'}
     (out/'Q4_pedal_timing_report.json').write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
     return report
@@ -78,7 +85,9 @@ def run(gm:Path,out:Path)->dict:
 
 if __name__=='__main__':
     p=argparse.ArgumentParser()
-    p.add_argument('--gm',type=Path,required=True)
+    back=p.add_mutually_exclusive_group(required=True)
+    back.add_argument('--gm',type=Path)
+    back.add_argument('--piano-assets',type=Path)
     p.add_argument('--out',type=Path,default=Path('q4-pedal-preview'))
     args=p.parse_args()
-    run(args.gm,args.out)
+    run(args.gm,args.out,assets=args.piano_assets)
