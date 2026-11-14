@@ -15,6 +15,7 @@ def main():
     p.add_argument('--guitar-performance',action='store_true',help='P2 optional strum gestures')
     p.add_argument('--bass-performance',action='store_true',help='P2 optional bass articulation')
     p.add_argument('--piano-performance',action='store_true',help='P2 optional piano touch and rolled chords')
+    p.add_argument('--piano-pedal-timing',action='store_true',help='Q4 Silver-only note-off deferral; not physical piano resonance')
     p.add_argument('--rhythm-pocket',action='store_true',help='P3 optional kick/bass pocket')
     p.add_argument('--drum-dynamics',action='store_true',help='P3 optional existing-hit dynamic accents')
     p.add_argument('--register-separation',action='store_true',help='P4 optional piano/foreground octave spacing')
@@ -26,6 +27,8 @@ def main():
     p.add_argument('--wav-source-root',type=Path,help='Q3 optional separate original stereo 24-bit WAV instrument folder')
     p.add_argument('--wav-parts',choices=['all','piano','acoustic'],default='all',help='Q3 optionally use stereo WAV for piano alone, acoustic alone, or both')
     a=p.parse_args();results=[]
+    if a.piano_pedal_timing and a.style!='silver':
+        p.error('--piano-pedal-timing is an optional, Silver-only authored pedal pattern; specify --style silver')
     for style in ([a.style] if a.style else SONGS):
         mp3,meta=render(style,a.out,assets=a.assets,gm=a.gm,guitar_performance=a.guitar_performance,
                         bass_performance=a.bass_performance,
@@ -39,7 +42,8 @@ def main():
                         transition_breath=a.transition_breath,
                         guitar_string_mapping=a.guitar_string_mapping,
                         wav_source_root=a.wav_source_root,
-                        wav_parts=a.wav_parts)
+                        wav_parts=a.wav_parts,
+                        piano_pedal_timing=a.piano_pedal_timing)
         report=inspect(mp3)
         results.append({'metadata':meta,'audio_qa':report})
     (a.out/'verification_v7.json').write_text(json.dumps(results,indent=2))
