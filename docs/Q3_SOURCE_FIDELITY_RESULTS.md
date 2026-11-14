@@ -35,8 +35,22 @@ The original stereo WAV archives are separately bound to exact publisher asset s
 
 - Local isolated WAV/OGG pairing, stereo note/repluck and installer fixtures: **10/10 passed**.
 - [Real paired archive research](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43513020178): **passed**, all three collections.
-- [Recorded-instrument stereo integration](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43515808986): unit-and-regression stage **passed**. Full real-publisher sound playback and A/B **pending verification** at this writing.
+- [Completed Q3 stereo integration](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43532042435): **33 tests passed**, both workflow jobs succeeded, and the publisher-source stereo/mono A/B recordings were MP3-decode verified.
 
 ## Decision boundary
 
 Q3 is not complete merely because lossless WAV exists. Accept only after full real-source MP3 decoding, preserved older OGG behavior, a measurable stereo/mono difference, and a clean published-source integrity report. Even then, **whether the stereo masters are preferred musically requires listening**, so the optional WAV flag should remain opt-in and original outputs remain preserved. Q4 continuous-instrument expressivity is next only after this engineering gate.
+
+## Confirmed Q3 real-audio comparison (November 13, 2026)
+
+The latest successful job generated short, matched-note comparisons with **identical source takes**, not different performances. Correlation of WAV downmix versus OGG mono mid is high but does not itself prove preference.
+
+| Isolated phrase | Original mono OGG side (dBFS) | Stereo WAV side (dBFS) | RMS matching difference (dB) | Mid correlation |
+|---|---:|---:|---:|---:|
+| Steel guitar | −240 (effectively 0) | −70.27 | 0.000 | 0.99990 |
+| Piano | −240 (effectively 0) | −38.96 | +0.321 | 0.99989 |
+| Nylon guitar | −240 (effectively 0) | −69.99 | 0.000 | 0.99981 |
+
+**Interpretation:** the stereo piano source retains significantly more measured side information than the two guitar examples. These are short selected takes, not comprehensive perceptual or music-quality tests. The originals were not overwritten. Technical Q3 acceptance is complete; the preferred sound is still an artistic choice.
+
+**Next Q4 integration:** test *Q2 physical guitar-string mapping plus Q3 24-bit stereo WAV playback together* on full scored guitar parts and independent repeated-note tails, without touching other instruments or default rendering.
