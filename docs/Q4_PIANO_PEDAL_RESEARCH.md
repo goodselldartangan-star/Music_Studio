@@ -17,9 +17,18 @@ The authored opt-in `--piano-pedal-timing` is limited to the 16-bar **Silver** s
 
 ## Acceptance checks
 
-- [ ] Five focused score tests including overlapping same-pitch notes, valid pedal-up, unchanged intro/nonpiano parts and invalid/unterminated window rejection.
-- [ ] Dedicated offline GM piano A/B and full Silver MP3 QA.
-- [ ] Full recorded Meta CC0 piano integration and no-overwrite release checks.
+- [x] Five focused score tests including overlapping same-pitch notes, valid pedal-up, unchanged intro/nonpiano parts and invalid/unterminated window rejection.
+- [x] [Q4 clean runner](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43545431132) passed **28 focused tests**, equal-source GM piano A/B and complete opt-in Silver MP3 QA.
+- [x] The same Q4 run downloaded only the **official pinned CC0 Meta piano OGG** (352 recordings), checked publisher SHA256 and license, and decoded two short actual piano A/B MP3s.
+- [x] [Full recorded-instrument workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/43545222979) passed original v7 audio, optional Q4 Silver piano, MP3 QA and release preservation; prior original release assets were not overwritten.
 - [ ] Later, if a sampler capable of ARIA extensions and genuine released samples is available, isolated test for CC64, hammer/release/sympathetic layers and repeated-note behavior. No source library adoption before tests.
 
 **Boundary:** Pedal note-off deferral is one real aspect of keyboard control; it does not make ordinary note-on samples reproduce a real piano soundboard or dampers. Even a verified larger library would need an acoustic listening choice before claiming superior musical realism.
+
+## Confirmed real-audio evidence (November 13, 2026)
+
+The real publisher-OGG Q4 test measured **32** piano note-offs deferred in 8 intentionally separated pedal windows, maximum extension **1.3 beats**. There was no waveform difference before the first opted-in build passage, and a nonzero entire-phrase PCM difference of **0.00087679 RMS**.
+
+The 12-second piano excerpt's RMS was **−39.98 dBFS** both before and after, with similar peaks (−17.37 and −17.38 dBFS). This demonstrates an effect without volume bias; it is **not** a listening verdict or proof of better pedaling. The optional change is controlled by `demo_v7.py --assets assets/v7 --style silver --piano-pedal-timing` and writes a separate `silver-v7-q4-pedal-timing.mp3` without replacing the original.
+
+**Outstanding:** Genuine piano pedal/hammer/string resonance has not been implemented. The current player is FluidSynth/SF2; Salamander V3's specified SFZ/ARIA extensions and same-note self-masking require a separate renderer compatibility test. CC BY 3.0 attribution and the substantial new sample footprint must be recorded before adoption. Leave current sample selection and the independent overlapping-note contract unchanged.
