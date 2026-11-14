@@ -58,3 +58,57 @@ jobs:
             q4-pedal-preview/Q4_pedal_timing_report.json
             q4-integrated/verification_v7.json
           retention-days: 90
+
+  publisher-meta-piano:
+    needs: piano-pedal-timing
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install normal local audio readers
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Download one official pinned CC0 piano archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .q4-archive
+          gh release download meta-piano-v1.0.0 --repo facebookincubator/Meta-open-sound --pattern 'meta-open-sound-meta-piano-ogg.zip' --dir .q4-archive
+      - name: Verify original license, SHA256 and 352 real recordings
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from tools.install_cc0 import install_pack
+          result=install_pack('meta-piano',Path('.q4-archive/meta-open-sound-meta-piano-ogg.zip'),Path('assets/q4-piano'))
+          assert result['files']==352
+          assert result['license']=='CC0-1.0'
+          print(result)
+          PY
+      - name: Compare same released upright-piano samples with and without note-off deferral
+        run: |
+          python -m tools.compare_pedal_q4 --piano-assets assets/q4-piano --out q4-meta-preview
+          ffmpeg -v error -xerror -i q4-meta-preview/Q4_pedal_before.mp3 -f null -
+          ffmpeg -v error -xerror -i q4-meta-preview/Q4_pedal_after.mp3 -f null -
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('q4-meta-preview/Q4_pedal_timing_report.json').read_text())
+          assert report['backend']=='publisher Meta Piano OGG'
+          assert report['initial_audio_difference_rms']==0
+          assert report['entire_audio_difference_rms']>0
+          assert report['piano_performance']['piano_notes_held_past_key_release']==32
+          assert abs(report['excerpt_rms_difference_db'])<=.6
+          PY
+      - name: Preserve short technical comparisons only
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q4-Real-Meta-Piano-Pedal-Timing-AB
+          path: |
+            q4-meta-preview/Q4_pedal_*.mp3
+            q4-meta-preview/Q4_pedal_timing_report.json
+          retention-days: 90
