@@ -10,8 +10,10 @@ on:
       - 'demo_v7.py'
       - 'tools/install_wav_q3.py'
       - 'tools/compare_stereo_wav_q3.py'
+      - 'tools/verify_string_stereo_q4.py'
       - 'tests/test_stereo_wav_q3.py'
       - 'tests/test_stereo_pipeline_q3.py'
+      - 'tests/test_combined_sources_q4.py'
       - 'tests/test_install_wav_q3.py'
       - '.github/workflows/q3-stereo-source-playback.yml'
   workflow_dispatch:
@@ -35,7 +37,7 @@ jobs:
           sudo apt-get install -y libfluidsynth3 timgm6mb-soundfont
       - name: Q3 stereo, source archive safety and original playback contracts
         run: |
-          python -m unittest tests.test_stereo_wav_q3 tests.test_stereo_pipeline_q3 tests.test_install_wav_q3 tests.test_sample_take_identity tests.test_string_mapping_q2 tests.test_articulation -v
+          python -m unittest tests.test_stereo_wav_q3 tests.test_stereo_pipeline_q3 tests.test_install_wav_q3 tests.test_sample_take_identity tests.test_string_mapping_q2 tests.test_articulation tests.test_combined_sources_q4 -v
 
   real-stereo-comparison:
     needs: unit-and-regression
@@ -85,6 +87,26 @@ jobs:
           python -m tools.compare_stereo_wav_q3 \
             --ogg-assets assets/q3-original-ogg --wav-assets assets/q3-stereo-wav --out q3-compare
           for audio in q3-compare/Q3_*.mp3; do ffmpeg -v error -xerror -i "$audio" -f null -; done
+      - name: Verify Q4 combined physical string assignments in original stereo guitar scores
+        run: |
+          python -m tools.verify_string_stereo_q4 \
+            --ogg-assets assets/q3-original-ogg \
+            --wav-assets assets/q3-stereo-wav \
+            --out q4-combined
+          for audio in q4-combined/Q4_*.mp3; do ffmpeg -v error -xerror -i "$audio" -f null -; done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('q4-combined/Q4_combined_source_report.json').read_text())['scores']
+          assert report['harbor']['string_mapped_strums']==32
+          assert report['silver']['string_mapped_strums']==4
+          for style,item in report.items():
+              assert item['unmapped_strums']==item['string_conflicts']==0
+              assert item['piano_preserved_by_string_mapping']
+              assert item['wav_and_ogg_exact_take_matches']==item['guitar_note_count']
+              assert abs(item['excerpt_rms_difference_db'])<=.5
+          print('All 36 physical guitar gestures match identical OGG/WAV source takes.')
+          PY
       - name: Keep only evidence and short A/B audio, not publisher source archives
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,6 +115,8 @@ jobs:
           path: |
             q3-compare/Q3_*.mp3
             q3-compare/Q3_short_comparison.json
+            q4-combined/Q4_*.mp3
+            q4-combined/Q4_combined_source_report.json
             assets/q3-stereo-wav/wav_provenance.json
             assets/q3-original-ogg/provenance.json
           retention-days: 90
