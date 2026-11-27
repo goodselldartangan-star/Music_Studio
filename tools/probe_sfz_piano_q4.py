@@ -180,11 +180,19 @@ def _voice_metrics(old:np.ndarray,new:np.ndarray,both:np.ndarray)->dict:
     # self-masking.
     tail_old=rms(_window(old,1.4,1.9))
     tail_actual=rms(_window(both,1.4,1.9))
+    after_expected=_window(expected,1.4,1.9)
+    after_actual=_window(both,1.4,1.9)
+    after_error=rms(after_actual-after_expected)/max(rms(after_expected),1e-12)
+    # Before the short note-off, sample voices can add almost linearly;
+    # after it, a same-pitch note-off may inadvertently stop the older note.
+    # This is not unambiguously attributable to note_polyphony alone.
     return {"sum_waveform_relative_error":round(discrepancy,5),
+            "post_short_noteoff_relative_error":round(after_error,5),
             "old_tail_rms":round(tail_old,7),
             "combined_post_repluck_rms":round(tail_actual,7),
             "tail_ratio":round(tail_actual/max(tail_old,1e-12),5),
-            "nearly_linear_sum":bool(discrepancy<.08)}
+            "nearly_linear_sum_before_noteoff":bool(discrepancy<.08),
+            "independent_post_noteoff_tails":bool(after_error<.12)}
 
 
 def inspect(root:Path)->dict:
@@ -215,6 +223,17 @@ def inspect(root:Path)->dict:
     window=(.75,1.2)
     rel_level=rms(_window(key_release-baseline,*window))
     resonant_level=rms(_window(resonance-key_release,*window))
+    # A production-safe reference: render the two physical note voices in
+    # separate offline sampler processes and sum their PCM. This is a
+    # feasibility reference only; it is NOT enabled in Music Studio.
+    independent=read_stereo(root/"unlimited_old.wav")+read_stereo(root/"unlimited_new_loud.wav")
+    combined=read_stereo(root/"unlimited_both_loud.wav")
+    sf.write(root/"Q4_independent_voice_reference.wav",independent,44100,subtype="PCM_24")
+    result["voice_isolation_reference"]={
+        "single_process_post_noteoff_error":result["voice_tests"]["unlimited"]["louder_same_channel"]["post_short_noteoff_relative_error"],
+        "independent_pcm_sum_old_tail_preserved":True,
+        "purpose":"Reference waveform only. Production would require a real independent-instance SFZ voice pool."
+    }
     result["release_samples"]={
         "key_release_extra_rms":round(rel_level,8),
         "string_resonance_extra_rms":round(resonant_level,8),
@@ -230,8 +249,10 @@ def inspect(root:Path)->dict:
     }
     result["limitations"]=(
         "Miniature real-sample SFZ, not the full ARIA Salamander program. "
-        "A non-linear same-note sum may include MIDI note-off semantics and "
-        "self-masking. No production integration or artistic preference.")
+        "The same-pitch note-off interaction includes channel handling and "
+        "possible SFZ self-masking, not just one opcode. The post-noteoff tail "
+        "must be measured; a nearly linear pre-release sum is insufficient. "
+        "No production integration or artistic preference.")
     (root/"Q4_sfizz_feasibility_report.json").write_text(json.dumps(result,indent=2))
     print(json.dumps(result,indent=2))
     return result
