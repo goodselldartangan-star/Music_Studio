@@ -6,7 +6,8 @@ from pathlib import Path
 import mido
 
 from tools.render_sfz_lanes_q4 import prepare as lanes_prepare,FIXTURE
-from tools.sfz_pedal_controller_q4 import prepare as pedal_prepare
+from tools.sfz_pedal_controller_q4 import (
+    prepare as pedal_prepare, write_voice_only_sfz)
 
 
 def significant(path:Path):
@@ -60,6 +61,28 @@ class PedalSourceRoutingTests(unittest.TestCase):
         self.assertIn("amplitude_oncc22=200",sfz)
         self.assertIn("pedal.txt",sfz)
         self.assertNotIn("C4v12",sfz)
+
+    def test_derived_voice_program_cannot_trigger_physical_mechanism(self):
+        source=self.bank/"Salamander Grand Piano V3.sfz"
+        original=("<control>\\ndefault_path=Samples/\\n"
+                  '<group> key=60\\n<region> sample=C4v12.flac\\n'
+                  '<global>\\n#include "Data/pedal.txt"\\n')
+        source.write_text(original)
+        (self.bank/"Samples").mkdir(exist_ok=True)
+        dest=self.root/"derived"/"Q4_voice_only.sfz"
+        write_voice_only_sfz(source,dest,self.bank)
+        self.assertEqual(source.read_text(),original)
+        self.assertNotIn('#include "Data/pedal.txt"',dest.read_text())
+        self.assertIn("sample=C4v12.flac",dest.read_text())
+        self.assertTrue((dest.parent/"Data").is_symlink())
+        self.assertTrue((dest.parent/"Samples").is_symlink())
+        write_voice_only_sfz(source,dest,self.bank)
+        # The original full score is never changed, only derived presentation.
+        self.assertEqual(source.read_text(),original)
+        with self.assertRaisesRegex(ValueError,"exactly one"):
+            write_voice_only_sfz(
+                self.bank/"Data"/"pedal.txt",
+                self.root/"unexpected"/"voice.sfz",self.bank)
 
     def test_missing_genuine_pedal_map_cannot_be_faked(self):
         (self.bank/"Data"/"pedal.txt").unlink()
