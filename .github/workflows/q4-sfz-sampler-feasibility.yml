@@ -7,6 +7,8 @@ on:
       - 'tools/probe_sfz_piano_q4.py'
       - 'tests/test_sfz_probe_q4.py'
       - 'tests/test_sfz_voice_lanes_q4.py'
+      - 'tools/render_sfz_lanes_q4.py'
+      - 'tests/test_render_sfz_lanes_q4.py'
       - 'studio7/sfz_voice_lanes.py'
       - '.github/workflows/q4-sfz-sampler-feasibility.yml'
   workflow_dispatch:
@@ -29,7 +31,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
       - name: Test deterministic same-note comparisons and source-identity contracts
-        run: python -m unittest tests.test_sfz_probe_q4 tests.test_sfz_voice_lanes_q4 -v
+        run: python -m unittest tests.test_sfz_probe_q4 tests.test_sfz_voice_lanes_q4 tests.test_render_sfz_lanes_q4 -v
       - name: Download just five authentic CC BY 3.0 piano notes and noises, not the full library
         run: |
           mkdir -p q4-sfizz-probe/Samples
@@ -41,6 +43,8 @@ jobs:
           done
       - name: Verify every original publisher Git blob and generate fixed 4-second MIDI controls
         run: python -m tools.probe_sfz_piano_q4 prepare --out q4-sfizz-probe
+      - name: Allocate two same-pitch re-plucks to independent sampler instances
+        run: python -m tools.render_sfz_lanes_q4 prepare --out q4-sfizz-probe/lanes
       - name: Install sfizz 1.2.3 offline renderer in isolated Alpine edge testing container
         run: |
           docker run --rm \
@@ -53,6 +57,12 @@ jobs:
                 prefix="${base%%_*}"
                 echo "Rendering $midi using $prefix.sfz"
                 sfizz_render --sfz "$prefix.sfz" --midi "$midi" \
+                  --wav "$base.wav" -s 44100 --use-eot
+              done
+              for midi in lanes/lane_*.mid; do
+                base="${midi%.mid}"
+                echo "Independently rendering $base through its own SFZ instance"
+                sfizz_render --sfz unlimited.sfz --midi "$midi" \
                   --wav "$base.wav" -s 44100 --use-eot
               done
             '
@@ -77,6 +87,23 @@ jobs:
               if not voice['louder_same_channel']['independent_post_noteoff_tails']:
                   print('BLOCKER:',mode,'older voice is not independently preserved in one SFZ instance')
           PY
+      - name: Verify genuinely independent sampler instances preserve old C4 through new note-off
+        run: |
+          python -m tools.render_sfz_lanes_q4 mix --out q4-sfizz-probe/lanes
+          python - <<'PY'
+          from pathlib import Path
+          from tools.probe_sfz_piano_q4 import read_stereo, rms, _window
+          root=Path('q4-sfizz-probe')
+          isolated=read_stereo(root/'lanes/Q4_isolated_lane_mix.wav')
+          reference=read_stereo(root/'Q4_independent_voice_reference.wav')
+          old=read_stereo(root/'unlimited_old.wav')
+          rel_error=rms(isolated-reference)/max(rms(reference),1e-10)
+          post_tail=rms(_window(isolated,1.4,1.9))/max(rms(_window(old,1.4,1.9)),1e-10)
+          print('Lane renderer relative error:',rel_error)
+          print('Older C4 tail after shorter new note-off:',post_tail)
+          assert rel_error<.02
+          assert .8<post_tail<1.5
+          PY
       - name: Save only source provenance, measurements and short comparison MP3s
         if: always()
         run: |
@@ -89,6 +116,12 @@ jobs:
               fi
             done
           done
+          if test -f q4-sfizz-probe/lanes/Q4_isolated_lane_mix.wav; then
+            ffmpeg -nostdin -v error -y \
+              -i q4-sfizz-probe/lanes/Q4_isolated_lane_mix.wav \
+              -c:a libmp3lame -b:a 192k \
+              q4-sfizz-probe/Q4_independent_sfz_lane_mix.mp3
+          fi
           if test -f q4-sfizz-probe/Q4_independent_voice_reference.wav; then
             ffmpeg -nostdin -v error -y \
               -i q4-sfizz-probe/Q4_independent_voice_reference.wav \
