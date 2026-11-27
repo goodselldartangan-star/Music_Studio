@@ -1,0 +1,81 @@
+name: Q4.2 sampled-guitar stopped-pluck isolated audio A/B
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/guitar_damping_q42.py'
+      - 'studio7/render.py'
+      - 'tests/test_guitar_stopped_tail_q42.py'
+      - 'tools/demo_stopped_guitar_q42.py'
+      - '.github/workflows/q42-stopped-guitar-audio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stopped-voice-audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run offline note-preservation and independent voice unit tests
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_guitar_stopped_tail_q42 -v
+      - name: Install standard conventional audio encoding/decoding tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libfluidsynth3
+      - name: Fetch the original CC0 source-recorded 375-note Meta steel guitar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p q42-original-guitar
+          gh release download meta-steel-guitar-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' \
+            --dir q42-original-guitar
+          python - <<'PY'
+          from pathlib import Path
+          from tools.install_cc0 import install_pack
+          m=install_pack('meta-steel-guitar',
+             Path('q42-original-guitar/meta-open-sound-meta-steel-guitar-ogg.zip'),
+             Path('q42-guitar-assets'))
+          assert m['license']=='CC0-1.0' and m['files']==375
+          assert m['archive_revision']=='historically-verified'
+          print('Genuine original 375 recordings verified by publisher SHA-256')
+          PY
+      - name: Render matched real-string Harbor guitar with six opt-in stopped upstrokes
+        run: |
+          python -m tools.demo_stopped_guitar_q42 \
+            --assets q42-guitar-assets --out q42-stopped-guitar
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('q42-stopped-guitar/Q42_stopped_guitar_comparison.json').read_text())
+          assert report['experimental_damping']['tagged_notes']==24
+          assert report['original_intro_pcm_identical']
+          assert report['all_score_pitch_onset_velocity_length_identical']
+          assert report['non_guitar_parts_not_rendered']
+          assert report['single_note_voice_tail_damping_only']
+          assert report['full_duration_difference_rms']>1e-5
+          assert report['excerpt_level_difference_db']<=.05
+          for result in report['results'].values():
+              assert result['peak_sample']<.84
+              assert Path('q42-stopped-guitar',result['mp3']).is_file()
+          print('Source sampled attacks, independent tails and level matched A/B verified')
+          PY
+      - name: Retain only two derived technical examples and report, not original samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q42-Independent-Recorded-Guitar-Stop-Comparison
+          path: |
+            q42-stopped-guitar/Q42_stopped_guitar_comparison.json
+            q42-stopped-guitar/*.mp3
+          retention-days: 90
