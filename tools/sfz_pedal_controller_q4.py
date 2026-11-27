@@ -143,7 +143,11 @@ def write_voice_only_sfz(source:Path, destination:Path, bank:Path)->None:
             if dest_link.resolve()!=from_source.resolve():
                 raise ValueError("Derived SFZ would reference wrong sample bank")
         elif not dest_link.exists():
-            dest_link.symlink_to(from_source.resolve(),target_is_directory=True)
+            # Relative symlinks survive the host-to-container bind mount:
+            # absolute /home/runner/... targets are invalid inside /work.
+            from os.path import relpath as _relpath
+            dest_link.symlink_to(_relpath(from_source.resolve(),dest_link.parent.resolve()),
+                                 target_is_directory=True)
         elif dest_link.resolve()!=from_source.resolve():
             raise ValueError("Derived program directory contains incompatible sample source")
     destination.write_text(rewritten)
