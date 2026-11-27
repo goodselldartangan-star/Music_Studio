@@ -1,0 +1,117 @@
+name: Q4.3 measured recorded bass note-tail and retrigger diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/articulation.py'
+      - 'tools/probe_bass_release_q43.py'
+      - 'tests/test_bass_release_q43.py'
+      - '.github/workflows/q43-bass-release-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-bass-voices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test score-preserving optional release channel plan
+        run: |
+          python -m pip install -r requirements.txt py7zr
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3 ffmpeg
+          python -m unittest tests.test_bass_release_q43 tests.test_articulation -v
+      - name: Fetch only the original CC0 finger and picked bass sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p q43-original-archives
+          gh release download 2019-09-30 \
+            --repo freepats/electric-bass-YR \
+            --pattern 'FingerBassYR-SF2-20190930.7z' \
+            --dir q43-original-archives
+          gh release download 2019-09-30 \
+            --repo freepats/electric-bass-YR \
+            --pattern 'PickedBassYR-SF2-20190930.7z' \
+            --dir q43-original-archives
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.request import urlopen
+          from urllib.parse import quote
+          from tools.audit_articulation_q42 import publisher_blob_sha
+          samples={
+            'finger_bass':('FingerBassYR 20190930.sfz',
+               '22537b45a1c5fe2d472d6053a4b5a5a5e4be7bf9'),
+            'picked_bass':('PickedBassYR 20190930.sfz',
+               'b642205a6c005f2014e526434cd5fc9ec6b5fe71')}
+          root=Path('q43-original-source')
+          root.mkdir(exist_ok=True)
+          for label,(name,sha) in samples.items():
+              url='https://raw.githubusercontent.com/freepats/electric-bass-YR/main/'+quote(name,safe='')
+              with urlopen(url,timeout=55) as resp:
+                  data=resp.read()
+              assert publisher_blob_sha(data)==sha
+              (root/(label+'.sfz')).write_bytes(data)
+              print(label, 'publisher SFZ verified')
+          PY
+      - name: Extract exact original SF2 bank from publisher release
+        run: |
+          python - <<'PY'
+          import py7zr,shutil
+          from pathlib import Path,PurePosixPath
+          root=Path('q43-original-archives')
+          dest=Path('q43-fonts')
+          dest.mkdir(exist_ok=True)
+          for name,archive in (
+            ('finger_bass','FingerBassYR-SF2-20190930.7z'),
+            ('picked_bass','PickedBassYR-SF2-20190930.7z')):
+              tmp=dest/('extract_'+name)
+              tmp.mkdir(exist_ok=True)
+              with py7zr.SevenZipFile(root/archive) as z:
+                names=z.getnames()
+                assert all(not PurePosixPath(x).is_absolute()
+                           and '..' not in PurePosixPath(x).parts for x in names)
+                z.extractall(path=tmp)
+              found=list(tmp.rglob('*.sf2'))
+              if len(found)!=1: raise ValueError('Expected one original SF2')
+              shutil.copyfile(found[0],dest/(name+'.sf2'))
+              shutil.rmtree(tmp)
+              print(name,'original bytes', (dest/(name+'.sf2')).stat().st_size)
+          PY
+      - name: Real sampled-bass audio replay: current vs source-tail guard
+        run: |
+          python -m tools.probe_bass_release_q43 \
+            --source-root q43-original-source \
+            --fonts q43-fonts --out q43-probe
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name,expected in (('finger',.5),('picked',.3)):
+              d=json.loads((Path('q43-probe')/
+                  f'Q43_{name}_bass_transition.json').read_text())
+              assert d['source_sfz_release_seconds']==expected
+              assert d['observed_channels_default']==[0,0]
+              assert d['observed_channels_source_guard']==[0,1]
+              assert d['reference_additive_window_rms']>1e-7
+              assert d['source_sf2_sample_count'] in (12,13)
+              print(name,
+                    'old relative error',d['reused_channel_relative_window_error'],
+                    'source guard error',d['isolated_channel_relative_window_error'],
+                    'difference RMS',d['isolated_minus_reused_window_rms'],
+                    'improves',d['guard_is_better_versus_additive_reference'])
+          PY
+      - name: Archive original source facts and short derived note probes only
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q43-Bass-Original-Source-Release-Measurements
+          path: |
+            q43-probe/*.json
+            q43-probe/*.wav
+          retention-days: 90
