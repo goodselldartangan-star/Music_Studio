@@ -20,7 +20,8 @@ UPSTREAM="sfzinstruments/SalamanderGrandPiano"
 COMMIT="3382bf9496bba2486f5ab0de55a264d1dfc38404"
 COUNTS={"note":480,"release":88,"resonance":69,"pedal":4}
 REQUIRED_FILES=("Salamander Grand Piano V3.sfz",
-                "Data/notes.txt","Data/region.txt","Data/hammer.txt","Data/str_res.txt",
+                "Data/notes.txt","Data/region.txt","Data/tune_nat.txt","Data/tune_ret.txt",
+                "Data/hammer.txt","Data/str_res.txt",
                 "Data/pedal.txt",*tuple(f"Data/vel_{v:02d}.txt" for v in range(1,17)))
 SAMPLE_REGEX=re.compile(r"\bsample=([^\s]+)")
 
@@ -35,8 +36,8 @@ def resolve_source_refs(root:Path)->dict[str,list[str]]:
         if not (root/relative).is_file():
             raise FileNotFoundError(f"Missing pinned SFZ definition: {relative}")
     main=(root/REQUIRED_FILES[0]).read_text()
-    for name in ("Data/notes.txt","Data/hammer.txt","Data/str_res.txt",
-                 "Data/pedal.txt"):
+    for name in ("Data/notes.txt","Data/tune_nat.txt","Data/tune_ret.txt",
+                 "Data/hammer.txt","Data/str_res.txt","Data/pedal.txt"):
         if f'#include "{name}"' not in main:
             raise ValueError(f"Main SFZ does not include {name}")
     notes=(root/"Data/notes.txt").read_text()
