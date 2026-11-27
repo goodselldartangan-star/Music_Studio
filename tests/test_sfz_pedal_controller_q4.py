@@ -86,6 +86,34 @@ class PedalSourceRoutingTests(unittest.TestCase):
                 self.bank/"Data"/"pedal.txt",
                 self.root/"unexpected"/"voice.sfz",self.bank)
 
+    def test_original_silver_102_bpm_cc64_edges_keep_absolute_time(self):
+        from studio7.score import make
+        from studio7.pedal_timing import atmospheric_pedal_windows
+        silver=make('silver')
+        bpm=silver['bpm']
+        self.assertEqual(bpm,102)
+        dest=self.root/"silver_lanes"
+        piano=[n for n in silver['notes'] if n['instrument']=='piano']
+        from tools.render_sfz_lanes_q4 import prepare as prepare_lanes
+        prepare_lanes(dest,piano,bpm,silver['duration'])
+        result=pedal_prepare(dest,self.bank,bpm=bpm,
+                             duration_s=silver['duration'],
+                             windows=atmospheric_pedal_windows(silver))
+        self.assertEqual(result['cc64_movement_count'],16)
+        whole=mido.MidiFile(dest/"shared_pedal.mid")
+        absolute_events=list(absolute(whole.tracks[0]))
+        controls=[(tick,msg.value) for tick,msg in absolute_events
+                  if msg.type=='control_change' and msg.control==64]
+        self.assertEqual(len(controls),16)
+        self.assertEqual(controls[0][0],round((32.02*60/102)*960))
+        self.assertEqual(controls[-1][0],round((63.88*60/102)*960))
+        duration_tick=round(silver['duration']*960)
+        self.assertEqual(absolute_events[-1][0],duration_tick)
+        self.assertGreater(duration_tick-controls[-1][0],100)
+        old=dest/"lane_00.mid"
+        updated=dest/"with_pedal_lane_00.mid"
+        self.assertEqual(significant(old),significant(updated))
+
     def test_missing_genuine_pedal_map_cannot_be_faked(self):
         (self.bank/"Data"/"pedal.txt").unlink()
         with self.assertRaises(FileNotFoundError):
