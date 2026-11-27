@@ -118,7 +118,8 @@ def sf2_inventory(path:Path)->dict:
     layouts={"phdr":38,"inst":22,"ibag":4,"igen":4,"shdr":46}
     if any(k not in pdta or len(pdta[k])%v or len(pdta[k])<v*2
            for k,v in layouts.items()):
-        raise ValueError("Incomplete SoundFont metadata tables")
+        raise ValueError("Incomplete SoundFont metadata tables: "+repr(
+            {k:len(v) for k,v in pdta.items()}))
     inst_names=[
         pdta["inst"][i:i+20].split(b"\0")[0].decode("latin1").strip()
         for i in range(0,len(pdta["inst"])-22,22)]
