@@ -67,6 +67,8 @@ The [successful 14-test combined audio run](https://github.com/goodselldartangan
 - All 14 unit tests passed; actual key-release, string-resonance and CC64 pedal recordings remained audible in the independent feature probe
 - A separate, derived short MP3 and compact test report are saved in the CI artifacts; **original publisher source files were not republished**
 
+The [final clean Q4 run with actual Silver sizing](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/45921258338) also measured **64 piano notes** in the existing full 16-bar Silver arrangement. They require **2 separate SFZ instances** both before and after the authored pedal note-off extension, with a **0.5-second release guard**. This is a score-derived concurrency budget, **not** a measured CPU/memory requirement: a complete licensed sample library would still need loading, performance profiling, and source license/attribution verification. The same run passed all 14 tests, real release/noise audio checks, and separate-instance PCM reconstruction.
+
 The **new method preserves this repeatable sample-level overlap case**, but it is a *standalone engineering prototype*. It has not been wired into the default Studio, and it has not yet played the complete 641-file Salamander SFZ program. Realistic pedal mechanics still require routing the CC64 noise only once rather than redundantly per instance, and benchmarking RAM/disk/CPU before attempting a full song.
 
 ## Engineering decision
