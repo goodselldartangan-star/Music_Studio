@@ -66,6 +66,12 @@ def resolve_source_refs(root:Path)->dict[str,list[str]]:
     release=(root/"Data/hammer.txt").read_text()
     if not re.search(r"\bkey=60\s+sample=rel40\.\$EXT",release):
         raise ValueError("Original MIDI-60 hammer release mapping changed")
+    release_pairs=[(int(key),int(sample))
+                   for key,sample in re.findall(
+                       r"\bkey=(\d+)\s+sample=rel(\d+)\.\$EXT",release)]
+    if (len(release_pairs)!=88 or
+            sorted(release_pairs)!=[(key,key-20) for key in range(21,109)]):
+        raise ValueError("One or more original MIDI 21-108 hammer release mappings changed")
     for group,expected in COUNTS.items():
         if len(result[group])!=expected or len(set(result[group]))!=expected:
             raise ValueError(f"Unexpected number of {group} sample regions")
