@@ -1,0 +1,93 @@
+name: Q4.2 real-backline Harbor stopped-string in-mix A/B
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studio7/guitar_damping_q42.py'
+      - 'studio7/render.py'
+      - 'tests/test_guitar_stopped_tail_q42.py'
+      - 'tools/compare_stopped_guitar_in_mix_q42.py'
+      - '.github/workflows/q42-stopped-guitar-full-mix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record-backed-harbor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install standard offline instruments and test exact voice preservation
+        run: |
+          python -m pip install -r requirements.txt py7zr
+          sudo apt-get update -qq
+          sudo apt-get install -y libfluidsynth3 ffmpeg
+          python -m unittest tests.test_guitar_stopped_tail_q42 -v
+      - name: Retrieve official original recorded Meta guitar/piano and FreePats drum/bass/electric
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p q42-original-archives
+          gh release download meta-steel-guitar-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' \
+            --dir q42-original-archives
+          gh release download meta-piano-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-piano-ogg.zip' \
+            --dir q42-original-archives
+          gh release download 2026-08-07 \
+            --repo freepats/electric-guitar-FSBS-clean \
+            --pattern 'EGuitarFSBS-clean-bridge-small-SF2-20260807.7z' \
+            --dir q42-original-archives
+          gh release download 2019-09-30 \
+            --repo freepats/electric-bass-YR \
+            --pattern 'FingerBassYR-SF2-20190930.7z' \
+            --dir q42-original-archives
+          gh release download 2020-10-18 \
+            --repo freepats/muldjordkit \
+            --pattern 'MuldjordKit-SF2-20201018.7z' \
+            --dir q42-original-archives
+      - name: Install provenance-checked original sampled instruments in isolated workspace
+        run: |
+          python tools/install_cc0.py --no-download \
+            --guitar-zip q42-original-archives/meta-open-sound-meta-steel-guitar-ogg.zip \
+            --piano-zip q42-original-archives/meta-open-sound-meta-piano-ogg.zip \
+            --out q42-assets
+          python tools/install_soundfonts.py \
+            --archives q42-original-archives --out q42-assets
+      - name: Render and verify guitar-only change in actual mixed 16-bar Harbor
+        run: |
+          python -m tools.compare_stopped_guitar_in_mix_q42 \
+            --assets q42-assets --out q42-real-mix
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('q42-real-mix/Q42_stopped_guitar_fullmix_report.json').read_text())
+          assert report['only_guitar_raw_stem_changed']
+          assert report['only_guitar_processed_stem_changed']
+          assert report['original_intro_guitar_raw_pcm_identical']
+          assert report['guitar_upstroke_tags']['tagged_notes']==24
+          assert report['source_guitar_difference_rms']>1e-5
+          assert report['full_mix_waveform_difference_rms']>1e-5
+          assert report['excerpt_level_difference_db']<=.05
+          for x in report['previews'].values():
+              assert x['peak']<=.8205
+              assert (Path('q42-real-mix')/x['file']).exists()
+          print('Recorded backing audio unchanged except guitar, and A/B levels safely matched.')
+          PY
+      - name: Archive two derived short full-mix comparisons, not original sample libraries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q42-Full-Recorded-Harbor-Stopped-Guitar-A-B
+          path: |
+            q42-real-mix/Q42_stopped_guitar_fullmix_report.json
+            q42-real-mix/*.mp3
+          retention-days: 90
