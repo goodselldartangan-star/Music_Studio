@@ -59,16 +59,17 @@ def resolve_source_refs(root:Path)->dict[str,list[str]]:
         result[group]=[x.replace("$EXT","flac") for x in values]
         if any("$" in x for x in result[group]):
             raise ValueError(f"Unsupported unexpanded sample token: {group}")
+    # Check semantic MIDI pitch mapping before counts/duplicate detection.
+    # This gives an actionable error when one release region is misrouted.
+    release=(root/"Data/hammer.txt").read_text()
+    if not re.search(r"\bkey=60\s+sample=rel40\.\$EXT",release):
+        raise ValueError("Original MIDI-60 hammer release mapping changed")
     for group,expected in COUNTS.items():
         if len(result[group])!=expected or len(set(result[group]))!=expected:
             raise ValueError(f"Unexpected number of {group} sample regions")
     all_names=[x for names in result.values() for x in names]
     if len(all_names)!=641 or len(set(all_names))!=641:
         raise ValueError("Duplicate or missing sample declarations across groups")
-    # Critical trap: rel40.flac belongs to MIDI 60, NOT rel60.flac.
-    release=(root/"Data/hammer.txt").read_text()
-    if not re.search(r"\bkey=60\s+sample=rel40\.\$EXT",release):
-        raise ValueError("Original MIDI-60 hammer release mapping changed")
     return result
 
 
