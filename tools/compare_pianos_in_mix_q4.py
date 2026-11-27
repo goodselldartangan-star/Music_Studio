@@ -96,11 +96,24 @@ def compare(*,meta_assets:Path, grand_lanes:Path,gm:Path,out:Path)->dict:
     start=round(19*SR)
     end=min(n,start+round(12*SR))
     outputs={}
+    # Source and processed-piano RMS were matched above. A different piano
+    # attack and cancellation profile can still change the *whole mix* RMS.
+    # Match ONLY exported listening-preview excerpt level, never the score,
+    # instrument processing, backline or published masters.
+    reference_clip=processed["meta_upright"][0][start:end]
+    target_mix_rms=rms(reference_clip)
     for name,(audio,_,diagnostics) in processed.items():
-        clip=audio[start:end]
+        unscaled=audio[start:end]
+        preview_gain=1.0 if name=="meta_upright" else target_mix_rms/max(rms(unscaled),1e-10)
+        if not .5<=preview_gain<=2.0:
+            raise AssertionError("Unsafe preview-only loudness correction")
+        clip=(unscaled*preview_gain).astype(np.float32)
         peak=float(np.max(np.abs(clip)))
         if peak>.8401:
             raise AssertionError("Technical preview exceeds mix peak cap")
+        preview_db=20*math.log10(max(rms(clip),1e-12)/max(target_mix_rms,1e-12))
+        if abs(preview_db)>.15:
+            raise AssertionError("Listening comparison was not RMS level matched")
         wav=out/f"Q4_Silver_{name}_comparison.wav"
         mp3=out/f"Q4_Silver_{name}_comparison.mp3"
         sf.write(wav,clip,SR,subtype="PCM_24")
@@ -112,6 +125,9 @@ def compare(*,meta_assets:Path, grand_lanes:Path,gm:Path,out:Path)->dict:
         wav.unlink()
         outputs[name]={"excerpt_peak":round(peak,6),
                        "excerpt_rms_dbfs":round(20*math.log10(max(rms(clip),1e-12)),3),
+                       "pre_level_match_excerpt_rms_dbfs":round(
+                            20*math.log10(max(rms(unscaled),1e-12)),3),
+                       "preview_only_level_match_gain":round(preview_gain,6),
                        "master_scale":diagnostics["master_scale"],
                        "mp3_file":mp3.name}
     report={
@@ -125,6 +141,9 @@ def compare(*,meta_assets:Path, grand_lanes:Path,gm:Path,out:Path)->dict:
         "same_melody_and_timing":True,
         "excerpt_start_seconds":19.,
         "excerpt_duration_seconds":round((end-start)/SR,3),
+        "rms_level_match_error_db":round(
+            outputs["salamander_grand"]["excerpt_rms_dbfs"]
+            -outputs["meta_upright"]["excerpt_rms_dbfs"],3),
         "results":outputs,
         "license_notice":"Salamander Grand Piano V3 by Alexander Holm, CC BY 3.0; reconstructed SFZ by kinwie, retuned by Markus Fiedler; Meta Open Sound upright CC0",
         "limitations":"The other parts use one fixed GM soundfont as a reproducible technical fixture; no listener preference or full real-instrument mix approved.",
