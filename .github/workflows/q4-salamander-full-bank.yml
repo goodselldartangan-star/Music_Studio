@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/q4-salamander-full-bank.yml'
       - 'tools/fetch_salamander_bank_q4.py'
+      - 'tools/audit_salamander_full_q4.py'
+      - 'tests/test_full_sfz_source_q4.py'
+      - 'tests/test_sfz_pedal_controller_q4.py'
       - 'tests/test_fetch_salamander_bank_q4.py'
       - 'tools/verify_full_salamander_mix_q4.py'
       - 'tests/test_verify_full_salamander_mix_q4.py'
