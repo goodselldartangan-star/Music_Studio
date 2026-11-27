@@ -31,7 +31,7 @@ def _absolute_ticks(track):
 
 
 def inject_cc_track(original:Path,destination:Path,controllers:list[tuple[float,int,int]],
-                    *,duration_beats:float)->None:
+                    *,bpm:float,duration_s:float)->None:
     mf=mido.MidiFile(original)
     if len(mf.tracks)!=1 or mf.ticks_per_beat!=480:
         raise ValueError("Only existing single-track 480 PPQ Q4 lane MIDI is supported")
@@ -45,8 +45,10 @@ def inject_cc_track(original:Path,destination:Path,controllers:list[tuple[float,
             continue
         events.append((tick,2,msg.copy(time=0)))
     for beat,cc,value in controllers:
-        tick=round(beat*480)
-        if tick>=round(duration_beats*480):
+        # The audio lane MIDI is fixed at 120 BPM (960 ticks/second), even
+        # when the musical score uses another tempo such as Silver's 102.
+        tick=round((beat*60/bpm)*960)
+        if tick>=round(duration_s*960):
             raise ValueError("Pedal edge exceeds MIDI duration")
         events.append((tick,0 if cc==22 else 1,
                        mido.Message("control_change",channel=0,
@@ -63,23 +65,23 @@ def inject_cc_track(original:Path,destination:Path,controllers:list[tuple[float,
         track.append(msg.copy(time=tick-prev))
         prev=tick
     track.append(mido.MetaMessage("end_of_track",
-                 time=max(0,round(duration_beats*480)-prev)))
+                 time=max(0,round(duration_s*960)-prev)))
     destination.parent.mkdir(parents=True,exist_ok=True)
     out.save(destination)
 
 
 def write_shared_pedal_midi(path:Path, controllers:list[tuple[float,int,int]],
-                            *,duration_beats:float)->None:
+                            *,bpm:float,duration_s:float)->None:
     # Create a silent out-of-range note near the end to prevent sfizz CLI
     # from trimming genuine pedal-release tails.
     tempo=500000
-    events=[(round(beat*480),0 if cc==22 else 1,
+    events=[(round((beat*60/bpm)*960),0 if cc==22 else 1,
              mido.Message("control_change",channel=0,control=cc,value=value))
             for beat,cc,value in controllers]
     events.extend([
-        (round((duration_beats-.4)*480),2,
+        (round((duration_s-.4)*960),2,
          mido.Message("note_on",channel=9,note=1,velocity=1)),
-        (round((duration_beats-.1)*480),2,
+        (round((duration_s-.1)*960),2,
          mido.Message("note_off",channel=9,note=1,velocity=0))])
     events.sort(key=lambda x:(x[0],x[1]))
     midi=mido.MidiFile(ticks_per_beat=480)
@@ -93,7 +95,7 @@ def write_shared_pedal_midi(path:Path, controllers:list[tuple[float,int,int]],
         track.append(msg.copy(time=tick-prev))
         prev=tick
     track.append(mido.MetaMessage("end_of_track",
-                    time=max(0,round(duration_beats*480)-prev)))
+                    time=max(0,round(duration_s*960)-prev)))
     path.parent.mkdir(parents=True,exist_ok=True)
     midi.save(path)
 
@@ -167,10 +169,10 @@ def prepare(root:Path,bank:Path,*,bpm:float, duration_s:float,
         if not path.is_file():
             raise FileNotFoundError(path)
         inject_cc_track(path,root/f"with_pedal_lane_{i:02d}.mid",events,
-                        duration_beats=duration_s*bpm/60)
+                        bpm=bpm,duration_s=duration_s)
     write_shared_pedal_midi(root/"shared_pedal.mid",
                             controls["single_mechanism_events"],
-                            duration_beats=duration_s*bpm/60)
+                            bpm=bpm,duration_s=duration_s)
     write_shared_pedal_sfz(root/"shared_pedal.sfz",bank)
     source=(Path(bank)/"Salamander Grand Piano V3.sfz")
     if source.is_file():
