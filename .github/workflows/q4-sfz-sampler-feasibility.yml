@@ -1,0 +1,91 @@
+name: Q4 sfizz offline SFZ probe — genuine pedal and release recordings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/probe_sfz_piano_q4.py'
+      - 'tests/test_sfz_probe_q4.py'
+      - '.github/workflows/q4-sfz-sampler-feasibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-sample-sfz-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install only conventional offline audio diagnostics
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Test deterministic same-note comparisons and source-identity contracts
+        run: python -m unittest tests.test_sfz_probe_q4 -v
+      - name: Download just five authentic CC BY 3.0 piano notes and noises, not the full library
+        run: |
+          mkdir -p q4-sfizz-probe/Samples
+          COMMIT=3382bf9496bba2486f5ab0de55a264d1dfc38404
+          for filename in C4v12.flac rel60.flac harmV3C4.flac pedalD1.flac pedalU1.flac; do
+            curl --fail --location --silent --show-error --retry 3 \
+              "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/$COMMIT/Samples/$filename" \
+              -o "q4-sfizz-probe/Samples/$filename"
+          done
+      - name: Verify every original publisher Git blob and generate fixed 4-second MIDI controls
+        run: python -m tools.probe_sfz_piano_q4 prepare --out q4-sfizz-probe
+      - name: Install sfizz 1.2.3 offline renderer in isolated Alpine edge testing container
+        run: |
+          docker run --rm \
+            -v "$PWD/q4-sfizz-probe:/work" -w /work alpine:edge sh -euc '
+              echo "https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+              apk add --no-cache sfizz
+              sfizz_render --help >/dev/null
+              for midi in *.mid; do
+                base="${midi%.mid}"
+                prefix="${base%%_*}"
+                echo "Rendering $midi using $prefix.sfz"
+                sfizz_render --sfz "$prefix.sfz" --midi "$midi" \
+                  --wav "$base.wav" -s 44100 --use-eot
+              done
+            '
+      - name: Measure voice self-masking and true recorded release/CC64 layers
+        run: |
+          python -m tools.probe_sfz_piano_q4 inspect --out q4-sfizz-probe
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('q4-sfizz-probe/Q4_sfizz_feasibility_report.json').read_text())
+          for variant,checks in report['voice_tests'].items():
+              print(variant,checks)
+          print('Release:',report['release_samples'])
+          print('Pedal:',report['pedal_noise'])
+          assert len(json.loads(Path('q4-sfizz-probe/source_identity.json').read_text())['samples'])==5
+          PY
+      - name: Save only source provenance, measurements and short comparison MP3s
+        if: always()
+        run: |
+          for variant in unlimited limited; do
+            for name in old both_loud both_split; do
+              src="q4-sfizz-probe/${variant}_${name}.wav"
+              if test -f "$src"; then
+                ffmpeg -nostdin -v error -y -i "$src" -c:a libmp3lame -b:a 192k \
+                  "q4-sfizz-probe/Q4_${variant}_${name}.mp3"
+              fi
+            done
+          done
+      - name: Archive diagnostics and derived short waveforms, not licensed samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q4-SFZ-Salamander-RealSample-Feasibility
+          path: |
+            q4-sfizz-probe/Q4_sfizz_feasibility_report.json
+            q4-sfizz-probe/source_identity.json
+            q4-sfizz-probe/Q4_*.mp3
+          retention-days: 90
