@@ -13,10 +13,12 @@ def fixture(root:Path):
     (root/"Data").mkdir(parents=True,exist_ok=True)
     (root/"Salamander Grand Piano V3.sfz").write_text(
         "\n".join(f'#include "Data/{a}.txt"' for a in
-                  ("notes","hammer","str_res","pedal")))
+                  ("notes","tune_nat","tune_ret","hammer","str_res","pedal")))
     (root/"Data/notes.txt").write_text('#include "Data/region.txt"\n')
     (root/"Data/region.txt").write_text(
         "\n".join(f"<region> sample=n{i}$VEL.$EXT" for i in range(30)))
+    for suffix in ("nat","ret"):
+        (root/f"Data/tune_{suffix}.txt").write_text("#define $TUNE01 0\n")
     for v in range(1,17):
         (root/f"Data/vel_{v:02d}.txt").write_text(f"#define $VEL v{v}\n")
     (root/"Data/hammer.txt").write_text(
