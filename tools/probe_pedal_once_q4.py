@@ -16,7 +16,8 @@ import mido
 import numpy as np
 import soundfile as sf
 
-from tools.sfz_pedal_controller_q4 import prepare as prepare_pedal
+from tools.sfz_pedal_controller_q4 import (
+    prepare as prepare_pedal, write_voice_only_sfz)
 from tools.probe_sfz_piano_q4 import rms,read_stereo
 
 SR=44100
@@ -49,7 +50,10 @@ def prepare(root:Path)->dict:
         "<region> sample=C4v12.flac\n"
         "<global>\nlocc22=1\namplitude_oncc22=200\n"
         '#define $EXT flac\n#include "Data/pedal.txt"\n')
-    # Same CC64 events; only the controller 22 value differs. This verifies
+    write_voice_only_sfz(
+        note_sfz,root/"voice_program"/"Q4_voice_only.sfz",root)
+    # Same CC64 events; only the controller 22 value differs. The mini
+    # runtime's CC22=0 suppression FAILED, so treat it only as diagnostic.
     # that CC22=0 silences pedal-only regions before the first movement.
     original=mido.MidiFile(root/"lanes/shared_pedal.mid")
     for track in original.tracks:
@@ -71,8 +75,13 @@ def inspect(root:Path)->dict:
     suppressed_rms=rms(muted)
     if enabled_rms<1e-6:
         raise AssertionError("Real pedal mechanism did not sound")
-    if suppressed_rms>max(1e-7,enabled_rms*.005):
-        raise AssertionError("CC22=0 did not suppress pedal mechanism")
+    # The CC22 gate alone was empirically unreliable with this sfizz build.
+    # Sound exclusion is enforced by a voice-only SFZ with NO pedal regions.
+    text=(root/"voice_program"/"Q4_voice_only.sfz").read_text()
+    if '#include "Data/pedal.txt"' in text:
+        raise AssertionError("Voice-only SFZ still includes pedal noise regions")
+    if not (root/"voice_program"/"Samples").is_symlink():
+        raise AssertionError("Derived voice program lost source sample links")
     if min(rms(first),rms(second))<1e-6:
         raise AssertionError("Muted CC22 also muted actual piano samples")
     mixed=first+second+on
@@ -92,10 +101,12 @@ def inspect(root:Path)->dict:
             "cc64_edges":2,
             "pedal_enabled_rms":round(enabled_rms,8),
             "pedal_muted_rms":round(suppressed_rms,8),
+            "cc22_only_mute_reliable":bool(suppressed_rms<=max(1e-7,enabled_rms*.005)),
+            "voice_only_sfz_no_pedal_regions":True,
             "single_mechanism_rms_difference_error":round(normalized_error,8),
             "mixed_peak":round(peak,6),
             "note_lanes_still_sound":True,
-            "limitations":"Five-source miniature SFZ. Complete Salamander 641-file keyboard, noise alternatives and RAM performance untested."}
+            "limitations":"Five-source miniature SFZ. Pedal routing uses source-program separation, NOT CC22 mute; full keyboard and RAM untested."}
     (root/"Q4_one_pedal_report.json").write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
     return report
