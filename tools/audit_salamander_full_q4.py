@@ -20,7 +20,7 @@ UPSTREAM="sfzinstruments/SalamanderGrandPiano"
 COMMIT="3382bf9496bba2486f5ab0de55a264d1dfc38404"
 COUNTS={"note":480,"release":88,"resonance":69,"pedal":4}
 REQUIRED_FILES=("Salamander Grand Piano V3.sfz",
-                "Data/notes.txt","Data/hammer.txt","Data/str_res.txt",
+                "Data/notes.txt","Data/region.txt","Data/hammer.txt","Data/str_res.txt",
                 "Data/pedal.txt",*tuple(f"Data/vel_{v:02d}.txt" for v in range(1,17)))
 SAMPLE_REGEX=re.compile(r"\bsample=([^\s]+)")
 
@@ -40,7 +40,9 @@ def resolve_source_refs(root:Path)->dict[str,list[str]]:
         if f'#include "{name}"' not in main:
             raise ValueError(f"Main SFZ does not include {name}")
     notes=(root/"Data/notes.txt").read_text()
-    note_regions=_refs(notes)
+    if '#include "Data/region.txt"' not in notes:
+        raise ValueError("Nested original pitch-zone include is missing")
+    note_regions=_refs((root/"Data/region.txt").read_text())
     if len(note_regions)!=30 or not all("$VEL" in t and "$EXT" in t
                                        for t in note_regions):
         raise ValueError("Expected 30 original pitch zones expanded by 16 velocities")
