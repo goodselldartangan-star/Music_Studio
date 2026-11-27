@@ -6,6 +6,8 @@ on:
     paths:
       - 'tools/probe_sfz_piano_q4.py'
       - 'tests/test_sfz_probe_q4.py'
+      - 'tests/test_sfz_voice_lanes_q4.py'
+      - 'studio7/sfz_voice_lanes.py'
       - '.github/workflows/q4-sfz-sampler-feasibility.yml'
   workflow_dispatch:
 
@@ -27,7 +29,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
       - name: Test deterministic same-note comparisons and source-identity contracts
-        run: python -m unittest tests.test_sfz_probe_q4 -v
+        run: python -m unittest tests.test_sfz_probe_q4 tests.test_sfz_voice_lanes_q4 -v
       - name: Download just five authentic CC BY 3.0 piano notes and noises, not the full library
         run: |
           mkdir -p q4-sfizz-probe/Samples
@@ -66,6 +68,14 @@ jobs:
           print('Release:',report['release_samples'])
           print('Pedal:',report['pedal_noise'])
           assert len(json.loads(Path('q4-sfizz-probe/source_identity.json').read_text())['samples'])==5
+          assert report['release_samples']['key_release_layer_detected']
+          assert report['release_samples']['string_resonance_layer_detected']
+          assert report['pedal_noise']['pedal_mechanism_layer_detected']
+          for mode,voice in report['voice_tests'].items():
+              assert voice['louder_same_channel']['old_tail_rms']>1e-6
+              assert 'post_short_noteoff_relative_error' in voice['louder_same_channel']
+              if not voice['louder_same_channel']['independent_post_noteoff_tails']:
+                  print('BLOCKER:',mode,'older voice is not independently preserved in one SFZ instance')
           PY
       - name: Save only source provenance, measurements and short comparison MP3s
         if: always()
@@ -79,6 +89,12 @@ jobs:
               fi
             done
           done
+          if test -f q4-sfizz-probe/Q4_independent_voice_reference.wav; then
+            ffmpeg -nostdin -v error -y \
+              -i q4-sfizz-probe/Q4_independent_voice_reference.wav \
+              -c:a libmp3lame -b:a 192k \
+              q4-sfizz-probe/Q4_independent_voice_reference.mp3
+          fi
       - name: Archive diagnostics and derived short waveforms, not licensed samples
         if: always()
         uses: actions/upload-artifact@v4
