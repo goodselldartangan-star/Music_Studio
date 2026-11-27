@@ -35,8 +35,17 @@ def small_sf2(path:Path,*,samples:tuple[str,...]=("E2 pluck",))->None:
 def fake_manifest(kind:str):
     prefix="Steel" if kind=="steel" else "Nylon"
     positions=125 if kind=="steel" else 116
-    # A correctly stratified three-layer synthetic source, not audio.
-    pairs=[("LowE",f"C{i}") for i in range(positions)]
+    # Build distinct, valid pitched string zones from the known guitar range.
+    string_specs=(("LowE",40,20),("A",45,21 if kind=="steel" else 19),
+                  ("D",50,21 if kind=="steel" else 19),
+                  ("G",55,21 if kind=="steel" else 19),
+                  ("B",59,21 if kind=="steel" else 19),
+                  ("HighE",64,21 if kind=="steel" else 20))
+    names=("C","Cs","D","Ds","E","F","Fs","G","Gs","A","As","B")
+    pairs=[(string,f"{names[midi%12]}{midi//12-1}")
+           for string,start,count in string_specs
+           for midi in range(start,start+count)]
+    assert len(pairs)==positions
     layers=("01","02","03") if kind=="steel" else ("01Finger","02Pick","03Pick")
     return {"id":"meta-"+kind+"-guitar","samples":[
         {"file":f"INSGuitar{prefix}_String{string}_Vel{layer}_{pitch}_01.wav"}
@@ -52,19 +61,13 @@ class Q42SourceAuditTests(unittest.TestCase):
 
     def test_incorrect_guitar_manifest_is_not_mistaken_for_complete_source(self):
         source=fake_manifest("nylon")
-        with self.assertRaisesRegex(ValueError,"completeness"):
-            meta_manifest(source,"nylon")
+        self.assertEqual(meta_manifest(source,"nylon")["recorded_note_count"],348)
         source["samples"].pop()
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError,"completeness"):
             meta_manifest(source,"nylon")
 
     def test_mute_and_slide_labels_not_inferred_from_guitar_velocity_names(self):
         source=fake_manifest("steel")
-        # Use six valid strings, 125 positions, three layers each.
-        strings=("LowE","A","D","G","B","HighE")
-        for index,item in enumerate(source["samples"]):
-            name=item["file"]
-            item["file"]=name.replace("StringLowE",f"String{strings[(index//3)%6]}")
         result=meta_manifest(source,"steel")
         self.assertEqual(result["recorded_note_count"],375)
         self.assertFalse(result["dedicated_articulation_filename_matches"])
