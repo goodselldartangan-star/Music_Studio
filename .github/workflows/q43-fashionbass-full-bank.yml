@@ -29,7 +29,7 @@ jobs:
           python -m pip install -r requirements.txt
           python -m unittest tests.test_fashionbass_q43 tests.test_bass_release_q43 tests.test_compare_fashionbass_q43 -v
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libfluidsynth3
       - name: Obtain exact complete original CC0 recorded bass bank in temporary CI workspace
         run: |
           df -h .
