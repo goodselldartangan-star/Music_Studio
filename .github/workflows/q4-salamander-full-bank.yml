@@ -153,6 +153,63 @@ jobs:
           assert len(r['results'])==2
           print('Only piano source changed; section/score and all other stems identical')
           PY
+      - name: Compare both pianos again inside the complete original recorded-instrument Silver backing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m pip install py7zr
+          mkdir -p .q4-real-archives
+          gh release download meta-steel-guitar-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-steel-guitar-ogg.zip' \
+            --dir .q4-real-archives
+          gh release download meta-nylon-guitar-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-nylon-guitar-ogg.zip' \
+            --dir .q4-real-archives
+          gh release download 2026-08-07 \
+            --repo freepats/electric-guitar-FSBS-clean \
+            --pattern 'EGuitarFSBS-clean-bridge-small-SF2-20260807.7z' \
+            --dir .q4-real-archives
+          gh release download 2019-09-30 \
+            --repo freepats/electric-bass-YR \
+            --pattern 'FingerBassYR-SF2-20190930.7z' \
+            --dir .q4-real-archives
+          gh release download 2019-09-30 \
+            --repo freepats/electric-bass-YR \
+            --pattern 'PickedBassYR-SF2-20190930.7z' \
+            --dir .q4-real-archives
+          gh release download 2020-10-18 \
+            --repo freepats/muldjordkit \
+            --pattern 'MuldjordKit-SF2-20201018.7z' \
+            --dir .q4-real-archives
+          python tools/install_cc0.py --no-download \
+            --guitar-zip .q4-real-archives/meta-open-sound-meta-steel-guitar-ogg.zip \
+            --piano-zip .q4-meta-original/meta-open-sound-meta-piano-ogg.zip \
+            --out assets/q4-original-backing
+          python tools/install_soundfonts.py --archives .q4-real-archives \
+            --out assets/q4-original-backing
+          python tools/install_optional_v7.py \
+            --picked-bass .q4-real-archives/PickedBassYR-SF2-20190930.7z \
+            --nylon .q4-real-archives/meta-open-sound-meta-nylon-guitar-ogg.zip \
+            --out assets/q4-original-backing
+          python -m tools.compare_pianos_in_mix_q4 \
+            --real-assets assets/q4-original-backing \
+            --grand-lanes q4-full-work/lanes \
+            --out q4-full-work/real-backing-comparison
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('q4-full-work/real-backing-comparison/Q4_piano_in_mix_comparison.json').read_text())
+          assert r['backing_source']=='original recorded guitar/bass/drum/electric samples'
+          assert r['original_nonpiano_parts_identical']
+          assert abs(r['rms_level_match_error_db'])<=.15
+          assert abs(r['piano_processed_rms_difference_db'])<=1.
+          assert r['full_mix_difference_rms']>1e-7
+          for preview in r['results'].values():
+              assert preview['excerpt_peak']<=.8401
+          print('Verified Meta vs grand with identical real sampled recorded backline')
+          PY
       - name: Archive just metrics, audit and derived excerpt; never original licensed recordings
         if: always()
         uses: actions/upload-artifact@v4
@@ -167,4 +224,6 @@ jobs:
             q4-full-work/derived-preview/*.mp3
             q4-full-work/in-mix-comparison/Q4_piano_in_mix_comparison.json
             q4-full-work/in-mix-comparison/*.mp3
+            q4-full-work/real-backing-comparison/Q4_piano_in_mix_comparison.json
+            q4-full-work/real-backing-comparison/*.mp3
           retention-days: 90
