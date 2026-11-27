@@ -1,0 +1,69 @@
+name: Q4 Salamander official full SFZ index — 641 sample-closure audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audit_salamander_full_q4.py'
+      - 'tests/test_full_sfz_source_q4.py'
+      - '.github/workflows/q4-salamander-source-closure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-source-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local dependencies and run pure source tests
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_full_sfz_source_q4 -v
+      - name: Download pinned original SFZ text definitions (no 748 MB sample library)
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.parse import quote
+          from urllib.request import urlopen
+          from tools.audit_salamander_full_q4 import REQUIRED_FILES,COMMIT,UPSTREAM
+          root=Path('q4-full-source')
+          for relative in REQUIRED_FILES:
+              url=f'https://raw.githubusercontent.com/{UPSTREAM}/{COMMIT}/{quote(relative,safe="/")}'
+              destination=root/relative
+              destination.parent.mkdir(parents=True,exist_ok=True)
+              with urlopen(url,timeout=45) as response:
+                  destination.write_bytes(response.read())
+          print('Fetched',len(REQUIRED_FILES),'SFZ/control text files at pinned revision',COMMIT)
+          PY
+          curl --fail --silent --show-error --retry 3 \
+            'https://api.github.com/repos/sfzinstruments/SalamanderGrandPiano/git/trees/3382bf9496bba2486f5ab0de55a264d1dfc38404?recursive=1' \
+            -o q4-full-source/pinned-git-tree.json
+      - name: Audit every official audio sample reference against exact Git tree
+        run: |
+          python -m tools.audit_salamander_full_q4 \
+            --sfz-root q4-full-source \
+            --source-tree-json q4-full-source/pinned-git-tree.json \
+            --out q4-full-source/Q4_641_sample_closure.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('q4-full-source/Q4_641_sample_closure.json').read_text())
+          assert result['total_unique_original_flacs']==641
+          assert result['source_regions_by_group']=={'note':480,'release':88,'resonance':69,'pedal':4}
+          assert result['git_tree_total_bytes']==748397030
+          assert result['midi60_release_sample']=='rel40.flac'
+          assert result['blob_sha_verified_count']==0
+          print('641/641 authoritative paths verified; individual FLAC bytes NOT yet downloaded')
+          PY
+      - name: Save source manifest only, not original licensed sample files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q4-Salamander-641-SFZ-Reference-Closure
+          path: q4-full-source/Q4_641_sample_closure.json
+          retention-days: 90
