@@ -25,6 +25,7 @@ from .melody import shape_final_answer
 from .mix_translation import precise_mono_below
 from .sections import shape_transition_breath
 from .string_mapping import plan_guitar_samples,shape_harbor_bm_guitar
+from .guitar_damping_q42 import note_if_tagged
 
 DRUM_MAP={'kick':36,'snare':38,'hat':42,'open_hat':46,'tom':45,'rim':37,'crash':49}
 GM_PROGRAM={'acoustic':25,'electric':27,'piano':0,'bass':33,'lead':26,'drums':0}
@@ -71,6 +72,7 @@ def _sample_meta(score:dict,part:str,assets:Path,*,string_aware=False,stereo_wav
             else:
                 raw=collection.render(n['pitch'],n['velocity'],n['length'],score['bpm'],
                                       seed,region=selected[i] if selected is not None else None)
+            raw=note_if_tagged(raw,n)
             st=round(n['beat']*60/score['bpm']*SR);en=min(frames,st+len(raw))
             if en>st:
                 dest[st:en]+=(raw[:en-st] if stereo_wav else raw[:en-st,None])*.7071
@@ -91,6 +93,8 @@ def _sample_meta(score:dict,part:str,assets:Path,*,string_aware=False,stereo_wav
         else:
             raw=render_meta_note(bank,voice,score['bpm'],score['bars']*43+i,
                                  region=selected[i] if selected is not None else None)
+        if part=='acoustic':
+            raw=note_if_tagged(raw,n)
         start=round(n['beat']*60/score['bpm']*SR)
         end=min(frames,start+len(raw))
         if end>start:
