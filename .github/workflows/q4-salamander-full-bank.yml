@@ -147,6 +147,8 @@ jobs:
           assert r['score_original_piano_notes']==64
           assert r['original_nonpiano_parts_identical']
           assert abs(r['piano_processed_rms_difference_db'])<=1.
+          assert abs(r['rms_level_match_error_db'])<=.15
+          assert all(item['excerpt_peak']<=.8401 for item in r['results'].values())
           assert r['full_mix_difference_rms']>1e-7
           assert len(r['results'])==2
           print('Only piano source changed; section/score and all other stems identical')
