@@ -6,6 +6,7 @@ on:
     paths:
       - 'studio7/articulation.py'
       - 'tools/probe_bass_release_q43.py'
+      - 'tools/sweep_bass_retrigger_q43.py'
       - 'tests/test_bass_release_q43.py'
       - '.github/workflows/q43-bass-release-audit.yml'
   workflow_dispatch:
@@ -106,6 +107,25 @@ jobs:
                     'source guard error',d['isolated_channel_relative_window_error'],
                     'difference RMS',d['isolated_minus_reused_window_rms'],
                     'improves',d['guard_is_better_versus_additive_reference'])
+          PY
+      - name: Sweep every bass pitch used in all three real Music Studio arrangements
+        run: |
+          python -m tools.sweep_bass_retrigger_q43 \
+            --source-root q43-original-source \
+            --fonts q43-fonts --out q43-probe
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('finger','picked'):
+              p=Path('q43-probe')/f'Q43_{name}_bass_full_score_pitch_sweep.json'
+              report=json.loads(p.read_text())
+              assert report['distinct_original_score_pitches_tested']>=8
+              assert report['distinct_original_score_pitches_tested']==len(report['per_pitch'])
+              assert all(r['default_rms']>1e-6 and r['source_guard_rms']>1e-6
+                         for r in report['per_pitch'])
+              print(name,'tested',len(report['per_pitch']),'actual score pitches,',
+                    'max post-noteoff difference RMS:',
+                    report['max_post_repluck_noteoff_difference_rms'])
           PY
       - name: Archive original source facts and short derived note probes only
         uses: actions/upload-artifact@v4
