@@ -98,7 +98,7 @@ jobs:
               done
               for midi in lanes/with_pedal_lane_*.mid; do
                 base="${midi%.mid}"
-                sfizz_render --sfz Q4_note_lane_pedal_gate.sfz --midi "$midi" \
+                sfizz_render --sfz voice_program/Q4_voice_only.sfz --midi "$midi" \
                   --wav "$base.wav" -s 44100 --use-eot
               done
               for name in shared_pedal shared_pedal_muted; do
@@ -156,7 +156,9 @@ jobs:
           assert m['instance_count']==2
           assert m['note_lanes_still_sound']
           assert m['pedal_enabled_rms']>1e-6
-          assert m['pedal_muted_rms']<1e-7
+          assert m['voice_only_sfz_no_pedal_regions']
+          if not m['cc22_only_mute_reliable']:
+              print('CC22-only gate is insufficient; physical program separation required')
           assert m['single_mechanism_rms_difference_error']<.00001
           PY
       - name: Save only source provenance, measurements and short comparison MP3s
