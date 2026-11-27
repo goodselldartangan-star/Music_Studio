@@ -1,0 +1,110 @@
+name: Q4.3 complete 426-WAV original Fashionbass Harbor audio and memory gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/verify_fashionbass_full_q43.py'
+      - 'tools/render_fashionbass_full_q43.py'
+      - 'tests/fixtures/q43_fashionbass_original_tree.json'
+      - '.github/workflows/q43-fashionbass-full-bank.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-original-bass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test original score integrity and Fashionbass validation
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_fashionbass_q43 tests.test_bass_release_q43 -v
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Obtain exact complete original CC0 recorded bass bank in temporary CI workspace
+        run: |
+          df -h .
+          git clone --quiet --depth 1 \
+            https://github.com/sfzinstruments/karoryfer.fashionbass.git \
+            q43-full-original
+          python - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          root='q43-full-original'
+          sha=subprocess.check_output(['git','-C',root,'rev-parse','HEAD'],text=True).strip()
+          manifest=json.loads(Path('tests/fixtures/q43_fashionbass_original_tree.json').read_text())
+          assert sha==manifest['pinned_commit']=='0703973b300a6bacb837602be9b588ab64732a72'
+          assert (Path(root)/'LICENSE').is_file()
+          print('Original CC0 publisher repository commit pinned:',sha)
+          PY
+      - name: Byte-check and audio-header-verify all 426 original WAVs
+        run: |
+          python -m tools.verify_fashionbass_full_q43 \
+            --source q43-full-original \
+            --manifest tests/fixtures/q43_fashionbass_original_tree.json \
+            --out q43-full-results
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('q43-full-results/Q43_complete_original_bass_bank_report.json').read_text())
+          assert r['original_wavs_hash_and_audio_verified']==426
+          assert r['all_original_bass_pitches_covered']
+          assert r['source_original_wavs_unchanged']
+          assert r['verified_recording_groups']=={'notes':285,'release':76,'noises':65}
+          print('No original publisher WAV recordings copied into CI artifact')
+          PY
+      - name: Create independent sampler-instance score lanes from original Harbor bass notes
+        run: |
+          python -m tools.render_fashionbass_full_q43 prepare \
+            --out q43-full-results/lanes --style harbor
+      - name: Actually render all original bass samples through sfizz and measure process RSS
+        run: |
+          mkdir -p q43-full-results/metrics
+          docker run --rm -v "$PWD:/work" -w /work alpine:edge sh -euc '
+            echo "https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+            apk add --no-cache sfizz time
+            sfizz_render --help >/dev/null
+            for midi in q43-full-results/lanes/bass_lane_*.mid; do
+              stem="${midi%.mid}"
+              /usr/bin/time -f "source_fashionbass wall_s=%e peak_rss_kb=%M" \
+                -o "q43-full-results/metrics/$(basename "$stem").txt" \
+                sfizz_render \
+                  --sfz q43-full-original/Q43_derived_full_recorded_bass.sfz \
+                  --midi "$midi" --wav "$stem.wav" -s 44100 --use-eot
+            done
+          '
+      - name: Sum original recorded piano-compatible bass lanes and decode short technical excerpt
+        run: |
+          python -m tools.render_fashionbass_full_q43 mix \
+            --out q43-full-results/lanes
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('q43-full-results/lanes/Q43_Fashionbass_full_audio_report.json').read_text())
+          assert d['original_score_notes_preserved']>0
+          assert d['independent_voice_instances']>=1
+          assert d['source_mix_rms']>1e-6
+          assert d['preview_pcm_peak']<=.8201
+          assert d['original_other_stems_unchanged']
+          print('Full original recorded Fashionbass sample playback complete',d)
+          PY
+          cat q43-full-results/metrics/*.txt
+      - name: Keep only provenance, measurements and a short derived audio excerpt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q43-Full-Fashionbass-426-Original-Audio-Evidence
+          path: |
+            q43-full-results/Q43_complete_original_bass_bank_report.json
+            q43-full-results/lanes/Q43_Fashionbass_lane_plan.json
+            q43-full-results/lanes/Q43_Fashionbass_full_audio_report.json
+            q43-full-results/lanes/*.mp3
+            q43-full-results/metrics/*.txt
+          retention-days: 90
