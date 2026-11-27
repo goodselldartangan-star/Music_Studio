@@ -85,7 +85,7 @@ jobs:
               shutil.rmtree(tmp)
               print(name,'original bytes', (dest/(name+'.sf2')).stat().st_size)
           PY
-      - name: Real sampled-bass audio replay: current vs source-tail guard
+      - name: 'Real sampled-bass audio replay - current versus source-tail guard'
         run: |
           python -m tools.probe_bass_release_q43 \
             --source-root q43-original-source \
