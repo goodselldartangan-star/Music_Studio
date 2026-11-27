@@ -55,16 +55,30 @@ A second recorded-note channel did not resolve the issue in `sfizz_render`. The 
 
 As a **technical reference only**, the probe also exported a short PCM sum of independently rendered old and new piano notes. This avoids a shared same-key note-off event, demonstrating the desired signal behavior; it does **not** establish a CPU/RAM-efficient full production sampler. The GitHub artifact contains this derived comparison MP3 and the source/license manifest, but not the original publisher sample files.
 
+## First actual independent-instance audio renderer — passed
+
+A second, deliberately isolated module, `tools/render_sfz_lanes_q4.py`, now creates one MIDI stream per instance lane, renders each via its **own sfizz process**, and sums the resulting **stereo PCM** without stealing notes, shortening releases, or hiding clipped output through automatic normalization.
+
+The [successful 14-test combined audio run](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/45921081092) validated independent-lane MIDI creation, bounded pool capacity, full Silver score note preservation, clean stereo mixing and **actual publisher FLAC-based** note playback. It confirmed:
+
+- **2 independent SFZ sampler instances** for the controlled C4 long note + short re-pluck
+- **0.0 relative waveform error** versus the true separately rendered old+new PCM reference
+- The older C4 note's post-new-note-off RMS ratio measured **1.02056**, versus **0.11793** on the original single-instance output
+- All 14 unit tests passed; actual key-release, string-resonance and CC64 pedal recordings remained audible in the independent feature probe
+- A separate, derived short MP3 and compact test report are saved in the CI artifacts; **original publisher source files were not republished**
+
+The **new method preserves this repeatable sample-level overlap case**, but it is a *standalone engineering prototype*. It has not been wired into the default Studio, and it has not yet played the complete 641-file Salamander SFZ program. Realistic pedal mechanics still require routing the CC64 noise only once rather than redundantly per instance, and benchmarking RAM/disk/CPU before attempting a full song.
+
 ## Engineering decision
 
-**Do not switch the Music Studio production piano to sfizz/SFZ yet.** The next narrowly scoped test must use independent sampler instances or truly separate voice-identity handling, verify that an old held C4 continues after the newer C4 is released, and check mechanical/release layers with the full source program before considering integration. Routing a note to another MIDI channel did **not** solve it in this isolated offline test.
+**Do not switch the Music Studio production piano to sfizz/SFZ yet.** Separate sampler-instance rendering now preserves the one verified repeated C4 fixture, but it still needs the full program's 16 velocity layers, release/pedal routing, audio quality, memory budget and no-stolen-notes tests on real Silver before integration. Routing a note to another MIDI channel did **not** solve it in this isolated offline test.
 
 The diagnostic script `tools/probe_sfz_piano_q4.py` creates a repeatable, nonproduction reference by summing two notes rendered in separate isolated sampler processes. This preserves the old note mathematically but **is not yet a practical high-polyphony sampler backend**. The production solution must be efficient, licensed and regression tested.
 
 ## Exact status
 
-- **Verified:** offline sfizz executable, pinned publisher provenance, actual sampled pedal and release trigger paths, measured note-lifecycle blocker, and a deterministic score-to-independent-instance lane planner (10 tests).
-- **Not verified or implemented:** complete Salamander source program with all ARIA semantics, actual efficient independent sampler-instance rendering and mixing, full-song playback, realistic acoustic pedal preference, all 16 velocity layers, user listening approval.
+- **Verified:** offline sfizz executable, pinned publisher provenance, sampled pedal and release triggers, measured single-instance note-lifecycle blocker, independent-instance planning and an actual two-instance stereo PCM reference render (14 tests).
+- **Not verified or implemented:** complete Salamander source program with all ARIA semantics, production-efficient SFZ instance pooling and mechanical-noise routing, full-song playback, realistic acoustic pedal preference, all 16 velocity layers, user listening approval.
 - **Preserved:** original OGG/WAV sample backends, score, note tails, published MP3s and optional earlier Q4 note-off timing mode.
 
 No user files are required at this stage.
