@@ -106,9 +106,18 @@ def _write_midi(file:Path, events:list[tuple]) -> None:
     track.append(mido.MetaMessage("set_tempo",tempo=500_000,time=0))
     prev=0
     # 120 BPM and 480 ticks/beat, so 960 ticks/sec.
-    for when,kind,channel,value in sorted(events,key=lambda e:(e[0],0 if e[1]=="off" else 1)):
+    # sfizz_render can stop on the final audible note-off, even with EOT.
+    # A note on unmapped MIDI key 1 at 3.8s extends its render horizon,
+    # allowing release/pedal resonance to finish without adding audible piano.
+    guarded=[*events,(3.8,"sentinel_on",9,1),(3.95,"sentinel_off",9,1)]
+    for when,kind,channel,value in sorted(guarded,key=lambda e:(e[0],0 if e[1] in ("off","sentinel_off") else 1)):
         tick=round(when*960)
-        if kind=="cc":
+        if kind.startswith("sentinel_"):
+            msg=mido.Message("note_on" if kind=="sentinel_on" else "note_off",
+                             channel=channel,note=1,
+                             velocity=1 if kind=="sentinel_on" else 0,
+                             time=tick-prev)
+        elif kind=="cc":
             msg=mido.Message("control_change",channel=channel,control=64,value=value,
                              time=tick-prev)
         elif kind=="on":
@@ -144,8 +153,8 @@ def prepare(out:Path) -> dict:
 
 def read_stereo(path:Path,length:int=4*44100)->np.ndarray:
     x,sr=sf.read(path,dtype="float32",always_2d=True)
-    if sr!=44100 or x.shape[1]!=2 or len(x)<44100 or not np.isfinite(x).all():
-        raise AssertionError(f"Bad or silent-length sfizz output: {path.name}")
+    if sr!=44100 or x.shape[1]!=2 or len(x)<round(3.8*sr) or not np.isfinite(x).all():
+        raise AssertionError(f"Invalid or truncated sfizz output: {path.name} ({len(x)/sr:.3f}s)")
     y=np.zeros((length,2),np.float64)
     n=min(length,len(x))
     y[:n]=x[:n]
