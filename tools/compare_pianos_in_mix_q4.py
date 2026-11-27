@@ -43,17 +43,25 @@ def load_original_grand_lanes(folder:Path, *, frames:int)->np.ndarray:
     return audio
 
 
-def compare(*,meta_assets:Path, grand_lanes:Path,gm:Path,out:Path)->dict:
+def compare(*,meta_assets:Path|None, grand_lanes:Path,gm:Path|None,
+            real_assets:Path|None=None,out:Path)->dict:
     score=make("silver")
     n=round(score["duration"]*SR)
-    gm=Path(gm)
-    if not gm.is_file():
-        raise FileNotFoundError(gm)
-    # Render identical fallback backing just once. Only the piano source
-    # changes between A and B. The backline is an engineering fixture, not
-    # the optional fully recorded electric/bass/kit reference arrangement.
-    base=instrument_stems(score,gm=gm)
-    upright=_sample_meta(score,"piano",Path(meta_assets))
+    if (gm is None)==(real_assets is None):
+        raise ValueError("Choose precisely one original backing backend")
+    if real_assets is not None:
+        # Actual recorded nylon guitar, picked/finger bass, electric guitar,
+        # drums and lead; no GM fallback in this branch.
+        base=instrument_stems(score,assets=Path(real_assets))
+        upright=base["piano"].copy()
+    else:
+        gm=Path(gm)
+        if not gm.is_file():
+            raise FileNotFoundError(gm)
+        if meta_assets is None:
+            raise ValueError("Meta CC0 piano asset root required with GM backing")
+        base=instrument_stems(score,gm=gm)
+        upright=_sample_meta(score,"piano",Path(meta_assets))
     grand=load_original_grand_lanes(grand_lanes,frames=n)
     if upright.shape!=(n,2) or grand.shape!=(n,2):
         raise AssertionError("Piano stem clock/shape mismatch")
@@ -133,7 +141,11 @@ def compare(*,meta_assets:Path, grand_lanes:Path,gm:Path,out:Path)->dict:
     report={
         "style":"silver",
         "score_original_piano_notes":64,
-        "comparison":"Original CC0 Meta upright vs CC BY 3.0 Salamander grand, same GM backing and Music Studio effects",
+        "comparison":(
+            "Original CC0 Meta upright vs CC BY 3.0 Salamander grand, "
+            +("same publisher recorded-instrument backing"
+              if real_assets is not None else "same GM backing")
+            +" and the identical Music Studio effects"),
         "piano_dry_rms_match_gain":round(gain,5),
         "piano_processed_rms_difference_db":round(piano_level_diff,4),
         "full_mix_difference_rms":round(audio_delta,8),
@@ -146,7 +158,9 @@ def compare(*,meta_assets:Path, grand_lanes:Path,gm:Path,out:Path)->dict:
             -outputs["meta_upright"]["excerpt_rms_dbfs"],3),
         "results":outputs,
         "license_notice":"Salamander Grand Piano V3 by Alexander Holm, CC BY 3.0; reconstructed SFZ by kinwie, retuned by Markus Fiedler; Meta Open Sound upright CC0",
-        "limitations":"The other parts use one fixed GM soundfont as a reproducible technical fixture; no listener preference or full real-instrument mix approved.",
+        "backing_source":("original recorded guitar/bass/drum/electric samples"
+                          if real_assets is not None else "fixed GM fixture"),
+        "limitations":"Technical source replacement and measured levels only; no subjective preference, vocal arrangement or commercial production approval.",
     }
     (out/"Q4_piano_in_mix_comparison.json").write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
@@ -155,9 +169,12 @@ def compare(*,meta_assets:Path, grand_lanes:Path,gm:Path,out:Path)->dict:
 
 if __name__=="__main__":
     p=argparse.ArgumentParser()
-    p.add_argument("--meta-assets",required=True,type=Path)
+    p.add_argument("--meta-assets",type=Path)
     p.add_argument("--grand-lanes",required=True,type=Path)
-    p.add_argument("--gm",required=True,type=Path)
+    backend=p.add_mutually_exclusive_group(required=True)
+    backend.add_argument("--gm",type=Path)
+    backend.add_argument("--real-assets",type=Path)
     p.add_argument("--out",type=Path,default=Path("q4-inmix-preview"))
     a=p.parse_args()
-    compare(meta_assets=a.meta_assets,grand_lanes=a.grand_lanes,gm=a.gm,out=a.out)
+    compare(meta_assets=a.meta_assets,grand_lanes=a.grand_lanes,
+            gm=a.gm,real_assets=a.real_assets,out=a.out)
