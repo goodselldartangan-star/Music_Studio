@@ -41,9 +41,26 @@ jobs:
                   destination.write_bytes(response.read())
           print('Fetched',len(REQUIRED_FILES),'SFZ/control text files at pinned revision',COMMIT)
           PY
-          curl --fail --silent --show-error --retry 3 \
-            'https://api.github.com/repos/sfzinstruments/SalamanderGrandPiano/git/trees/3382bf9496bba2486f5ab0de55a264d1dfc38404?recursive=1' \
-            -o q4-full-source/pinned-git-tree.json
+          git clone --quiet --depth 1 --filter=blob:none --no-checkout \
+            https://github.com/sfzinstruments/SalamanderGrandPiano.git q4-tree-only
+          python - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          from tools.audit_salamander_full_q4 import COMMIT
+          root='q4-tree-only'
+          head=subprocess.check_output(['git','-C',root,'rev-parse','HEAD'],text=True).strip()
+          if head!=COMMIT:raise AssertionError('Original publisher revision drift; pin explicitly')
+          lines=subprocess.check_output(['git','-C',root,'ls-tree','-r','-l','HEAD'],text=True)
+          tree=[]
+          for line in lines.splitlines():
+              meta,path=line.split('\t',1)
+              mode,kind,sha,size=meta.split()
+              tree.append({'path':path,'type':kind,'sha':sha,
+                           'size':int(size) if size.isdigit() else None})
+          out=Path('q4-full-source/pinned-git-tree.json')
+          out.write_text(json.dumps({'truncated':False,'tree':tree},indent=2))
+          print('Pinned Git object tree indexed:',len(tree),'entries, no FLAC bytes downloaded')
+          PY
       - name: Audit every official audio sample reference against exact Git tree
         run: |
           python -m tools.audit_salamander_full_q4 \
