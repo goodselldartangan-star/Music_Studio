@@ -37,8 +37,8 @@ jobs:
           root=Path('q43-fashionbass')
           root.mkdir(exist_ok=True)
           names={
-              'fashionbass.sfz':'3b8c0332ce6267e7fa180f91ef45dd90bad30ae',
-              'fashionbass_clean.sfz':'d12a57ff5e60b0fb7c075b394d2b4c45a683bf3'}
+              'fashionbass.sfz':'5a5cbc5b486189dbdc0c4537247c0c8a63c52d7e',
+              'fashionbass_clean.sfz':'b0eb080e8ea06ed88a6c91faef44b8d0db2917b1'}
           for name in [*names,*SOURCES]:
               url=f'https://raw.githubusercontent.com/sfzinstruments/karoryfer.fashionbass/{REVISION}/{quote(name,safe="/")}'
               with urlopen(Request(url,headers={'User-Agent':'MusicStudio-Q43-BassResearch'}),timeout=90) as resp:
