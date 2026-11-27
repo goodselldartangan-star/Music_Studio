@@ -76,6 +76,8 @@ class PedalSourceRoutingTests(unittest.TestCase):
         self.assertIn("sample=C4v12.flac",dest.read_text())
         self.assertTrue((dest.parent/"Data").is_symlink())
         self.assertTrue((dest.parent/"Samples").is_symlink())
+        self.assertFalse((dest.parent/"Data").readlink().is_absolute())
+        self.assertFalse((dest.parent/"Samples").readlink().is_absolute())
         write_voice_only_sfz(source,dest,self.bank)
         # The original full score is never changed, only derived presentation.
         self.assertEqual(source.read_text(),original)
