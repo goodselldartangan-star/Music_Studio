@@ -66,12 +66,14 @@ class SfizzPianoProbeTests(unittest.TestCase):
         end=int(1.3*sr)
         new[at:end]=.05*np.sin(2*np.pi*220*t[at:end])[:,None]
         intact=probe._voice_metrics(old,new,old+new)
-        self.assertTrue(intact["nearly_linear_sum"])
+        self.assertTrue(intact["nearly_linear_sum_before_noteoff"])
+        self.assertTrue(intact["independent_post_noteoff_tails"])
         self.assertAlmostEqual(intact["tail_ratio"],1,places=4)
         stolen=(old+new).copy()
         stolen[at:]=new[at:]
         bad=probe._voice_metrics(old,new,stolen)
-        self.assertFalse(bad["nearly_linear_sum"])
+        self.assertFalse(bad["nearly_linear_sum_before_noteoff"])
+        self.assertFalse(bad["independent_post_noteoff_tails"])
         self.assertLess(bad["tail_ratio"],.01)
 
     def test_variants_do_not_claim_to_be_complete_salamander(self):
