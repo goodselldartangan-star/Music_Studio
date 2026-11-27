@@ -12,6 +12,8 @@ on:
       - 'tests/test_fetch_salamander_bank_q4.py'
       - 'tools/verify_full_salamander_mix_q4.py'
       - 'tests/test_verify_full_salamander_mix_q4.py'
+      - 'tools/compare_pianos_in_mix_q4.py'
+      - 'tests/test_compare_pianos_in_mix_q4.py'
       - 'tools/sfz_pedal_controller_q4.py'
       - 'tests/test_sfz_pedal_controller_q4.py'
   workflow_dispatch:
@@ -31,7 +33,7 @@ jobs:
       - name: Test full bank downloader and mix safety on tiny fixtures
         run: |
           python -m pip install -r requirements.txt
-          python -m unittest tests.test_fetch_salamander_bank_q4 tests.test_verify_full_salamander_mix_q4 tests.test_full_sfz_source_q4 tests.test_sfz_pedal_controller_q4 tests.test_sfz_pedal_routing_q4 -v
+          python -m unittest tests.test_fetch_salamander_bank_q4 tests.test_verify_full_salamander_mix_q4 tests.test_full_sfz_source_q4 tests.test_sfz_pedal_controller_q4 tests.test_sfz_pedal_routing_q4 tests.test_compare_pianos_in_mix_q4 -v
       - name: Check scratch space and publisher source license
         run: |
           df -h .
@@ -114,6 +116,41 @@ jobs:
             --out q4-full-work/derived-preview
           ffmpeg -nostdin -v error -xerror -i q4-full-work/derived-preview/Q4_Silver_full_original_Salamander_excerpt.mp3 -f null -
           cat q4-full-work/metrics/*.txt
+      - name: Compare real Meta upright vs full Salamander grand in the same Silver mix fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get install -y libfluidsynth3 timgm6mb-soundfont
+          mkdir -p .q4-meta-original
+          gh release download meta-piano-v1.0.0 \
+            --repo facebookincubator/Meta-open-sound \
+            --pattern 'meta-open-sound-meta-piano-ogg.zip' \
+            --dir .q4-meta-original
+          python - <<'PY'
+          from pathlib import Path
+          from tools.install_cc0 import install_pack
+          result=install_pack('meta-piano',
+                    Path('.q4-meta-original/meta-open-sound-meta-piano-ogg.zip'),
+                    Path('assets/q4-meta-upright'))
+          assert result['files']==352 and result['license']=='CC0-1.0'
+          print('Meta piano licensed source verification:',result)
+          PY
+          python -m tools.compare_pianos_in_mix_q4 \
+            --meta-assets assets/q4-meta-upright \
+            --grand-lanes q4-full-work/lanes \
+            --gm /usr/share/sounds/sf2/TimGM6mb.sf2 \
+            --out q4-full-work/in-mix-comparison
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('q4-full-work/in-mix-comparison/Q4_piano_in_mix_comparison.json').read_text())
+          assert r['score_original_piano_notes']==64
+          assert r['original_nonpiano_parts_identical']
+          assert abs(r['piano_processed_rms_difference_db'])<=1.
+          assert r['full_mix_difference_rms']>1e-7
+          assert len(r['results'])==2
+          print('Only piano source changed; section/score and all other stems identical')
+          PY
       - name: Archive just metrics, audit and derived excerpt; never original licensed recordings
         if: always()
         uses: actions/upload-artifact@v4
@@ -126,4 +163,6 @@ jobs:
             q4-full-work/metrics/*.txt
             q4-full-work/derived-preview/Q4_full_piano_audio_verification.json
             q4-full-work/derived-preview/*.mp3
+            q4-full-work/in-mix-comparison/Q4_piano_in_mix_comparison.json
+            q4-full-work/in-mix-comparison/*.mp3
           retention-days: 90
