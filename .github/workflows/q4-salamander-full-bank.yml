@@ -1,0 +1,115 @@
+name: Q4 full Salamander 641-FLAC original-source and two-instance runtime probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/q4-salamander-full-bank.yml'
+      - 'tools/fetch_salamander_bank_q4.py'
+      - 'tests/test_fetch_salamander_bank_q4.py'
+      - 'tools/verify_full_salamander_mix_q4.py'
+      - 'tests/test_verify_full_salamander_mix_q4.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-source-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test full bank downloader and mix safety on tiny fixtures
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_fetch_salamander_bank_q4 tests.test_verify_full_salamander_mix_q4 tests.test_full_sfz_source_q4 tests.test_sfz_pedal_controller_q4 tests.test_sfz_pedal_routing_q4 -v
+      - name: Check scratch space and publisher source license
+        run: |
+          df -h .
+          echo 'Original 641 FLACs are public CC BY 3.0 recordings by Alexander Holm.'
+          echo 'Do not redistribute source files as GitHub build artifacts.'
+      - name: Fetch and byte-verify all original 641 publicly licensed FLACs
+        run: |
+          python -m tools.fetch_salamander_bank_q4 \
+            --manifest tests/fixtures/q4_salamander_pinned_tree.json \
+            --out q4-full-bank --workers 4
+      - name: Independently verify every original FLAC and official SFZ mapping
+        run: |
+          mkdir -p q4-full-work
+          python -m tools.audit_salamander_full_q4 \
+            --sfz-root q4-full-bank \
+            --source-tree-json tests/fixtures/q4_salamander_pinned_tree.json \
+            --verify-sample-bytes \
+            --out q4-full-work/Q4_verified_original_bank.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          audit=json.loads(Path('q4-full-work/Q4_verified_original_bank.json').read_text())
+          assert audit['blob_sha_verified_count']==641
+          assert audit['total_unique_original_flacs']==641
+          assert audit['midi60_release_sample']=='rel40.flac'
+          assert audit['git_tree_total_bytes']==748397030
+          print('Every source FLAC checked against its pinned publisher Git blob')
+          PY
+      - name: Prepare untouched Silver score in two lanes, plus one original physical-pedal source
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from studio7.score import make
+          out=Path('q4-full-work')
+          out.mkdir(parents=True,exist_ok=True)
+          out.joinpath('silver-original.json').write_text(json.dumps(make('silver')))
+          PY
+          python -m tools.render_sfz_lanes_q4 prepare \
+            --score q4-full-work/silver-original.json \
+            --out q4-full-work/lanes
+          python -m tools.sfz_pedal_controller_q4 \
+            --lanes q4-full-work/lanes --bank q4-full-bank --silver
+      - name: Actually render full original SFZ with both isolated voices and one physical pedal synth
+        run: |
+          mkdir -p q4-full-work/metrics
+          docker run --rm -v "$PWD:/work" -w /work alpine:edge sh -euc '
+            echo "https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+            apk add --no-cache sfizz time
+            sfizz_render --help >/dev/null
+            for i in 00 01; do
+              /usr/bin/time -f "source_piano_lane_$i wall_s=%e peak_rss_kb=%M" \
+                -o "q4-full-work/metrics/lane_$i.txt" \
+                sfizz_render --sfz q4-full-work/lanes/voice_program/Q4_voice_only.sfz \
+                  --midi "q4-full-work/lanes/with_pedal_lane_$i.mid" \
+                  --wav "q4-full-work/lanes/with_pedal_lane_$i.wav" -s 44100 --use-eot
+            done
+            /usr/bin/time -f "source_shared_pedal wall_s=%e peak_rss_kb=%M" \
+              -o q4-full-work/metrics/shared_pedal.txt \
+              sfizz_render --sfz q4-full-work/lanes/shared_pedal.sfz \
+                --midi q4-full-work/lanes/shared_pedal.mid \
+                --wav q4-full-work/lanes/shared_pedal.wav -s 44100 --use-eot
+          '
+      - name: Validate complete played Silver and derive non-clipping short audio evidence
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          python -m tools.verify_full_salamander_mix_q4 \
+            --lanes q4-full-work/lanes \
+            --source-report q4-full-work/Q4_verified_original_bank.json \
+            --out q4-full-work/derived-preview
+          ffmpeg -nostdin -v error -xerror -i q4-full-work/derived-preview/Q4_Silver_full_original_Salamander_excerpt.mp3 -f null -
+          cat q4-full-work/metrics/*.txt
+      - name: Archive just metrics, audit and derived excerpt; never original licensed recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q4-Full641-Licensed-Piano-Technical-Evidence
+          path: |
+            q4-full-work/Q4_verified_original_bank.json
+            q4-full-work/lanes/Q4_lane_plan.json
+            q4-full-work/lanes/Q4_pedal_route_plan.json
+            q4-full-work/metrics/*.txt
+            q4-full-work/derived-preview/Q4_full_piano_audio_verification.json
+            q4-full-work/derived-preview/*.mp3
+          retention-days: 90
