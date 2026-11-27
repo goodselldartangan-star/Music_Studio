@@ -32,6 +32,30 @@ jobs:
           sudo apt-get install -y ffmpeg
       - name: Test deterministic same-note comparisons and source-identity contracts
         run: python -m unittest tests.test_sfz_probe_q4 tests.test_sfz_voice_lanes_q4 tests.test_render_sfz_lanes_q4 -v
+      - name: Audit required instance pool against actual Silver score and opted-in pedal timing
+        run: |
+          mkdir -p q4-sfizz-probe
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from studio7.score import make
+          from studio7.pedal_timing import shape_silver_pedal_timing
+          from studio7.sfz_voice_lanes import assign_sfz_voice_lanes
+          score=make('silver')
+          pedal,_=shape_silver_pedal_timing(score)
+          result={}
+          for name,music in (('original',score),('pedal_timing',pedal)):
+              piano=[n for n in music['notes'] if n['instrument']=='piano']
+              groups,stats=assign_sfz_voice_lanes(piano,music['bpm'],max_instances=8)
+              assert stats['input_notes']==sum(len(group) for group in groups)
+              result[name]={
+                  'piano_notes':stats['input_notes'],
+                  'required_instances':stats['instance_count'],
+                  'release_guard_s':stats['release_guard_s']
+              }
+          Path('q4-sfizz-probe/Q4_silver_instance_budget.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
       - name: Download just five authentic CC BY 3.0 piano notes and noises, not the full library
         run: |
           mkdir -p q4-sfizz-probe/Samples
@@ -136,5 +160,8 @@ jobs:
           path: |
             q4-sfizz-probe/Q4_sfizz_feasibility_report.json
             q4-sfizz-probe/source_identity.json
+            q4-sfizz-probe/Q4_silver_instance_budget.json
+            q4-sfizz-probe/lanes/Q4_lane_audio_report.json
+            q4-sfizz-probe/lanes/Q4_lane_plan.json
             q4-sfizz-probe/Q4_*.mp3
           retention-days: 90
