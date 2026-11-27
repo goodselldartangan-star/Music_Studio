@@ -18,11 +18,15 @@ class SfizzPianoProbeTests(unittest.TestCase):
             path=Path(tmp)/"two.mid"
             probe._write_midi(path,probe.CASES["both_split"])
             midi=mido.MidiFile(path)
-            events=[msg for msg in midi.tracks[0] if msg.type in ("note_on","note_off")]
+            events=[msg for msg in midi.tracks[0] if msg.type in ("note_on","note_off") and msg.note==60]
             self.assertEqual([(e.type,e.channel,e.note) for e in events],[
                 ("note_on",0,60),("note_on",1,60),
                 ("note_off",1,60),("note_off",0,60)])
             self.assertEqual(sum(e.time for e in midi.tracks[0]),3840)
+            sentinel=[msg for msg in midi.tracks[0]
+                      if msg.type in ("note_on","note_off") and msg.note==1]
+            self.assertEqual([(msg.type,msg.channel) for msg in sentinel],
+                             [("note_on",9),("note_off",9)])
 
     def test_sustain_cc64_fixture_has_up_after_down(self):
         with tempfile.TemporaryDirectory() as tmp:
