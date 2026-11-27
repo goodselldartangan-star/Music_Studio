@@ -114,7 +114,7 @@ def sf2_inventory(path:Path)->dict:
                     if count>4_000_000:
                         raise ValueError("Unreasonable SF2 metadata size")
                     f.seek(datapos)
-                    pdta[child]=f.read(count)
+                    pdta[child.decode("ascii")]=f.read(count)
     layouts={"phdr":38,"inst":22,"ibag":4,"igen":4,"shdr":46}
     if any(k not in pdta or len(pdta[k])%v or len(pdta[k])<v*2
            for k,v in layouts.items()):
