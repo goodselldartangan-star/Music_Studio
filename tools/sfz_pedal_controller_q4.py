@@ -1,9 +1,12 @@
 """Q4 experimental real-SFZ pedal routing: CC64 everywhere, pedal sound once.
 
 Preserves every existing note-on/off in each independent sampler MIDI file.
-CC22=0 mutes the Salamander pedal mechanism regions in note synths;
-a separate shared SFZ instance with the publisher's original Data/pedal.txt
-plays the mechanism one time per CC64 edge. This is experimental tooling;
+The original source program is split into a temporary voice-only SFZ (the
+Data/pedal.txt include is excluded) and one shared pedal-only SFZ instance.
+The CC22=0 controller on note lanes is extra safety only: the miniature
+sfizz tests showed CC22 alone cannot be trusted as a mute.
+One shared SFZ instance plays mechanisms once per CC64 edge.
+This is experimental tooling;
 original Music Studio playback and earlier audio files remain unchanged.
 """
 from __future__ import annotations
@@ -110,6 +113,42 @@ def write_shared_pedal_sfz(path:Path, bank:Path)->None:
     path.write_text(sfz)
 
 
+def write_voice_only_sfz(source:Path, destination:Path, bank:Path)->None:
+    """Copy source SFZ program to an isolated workspace without pedal regions.
+
+    Original source file and Data/Samples content are never modified.
+    Data/ and Samples/ links retain relative include paths for the complete
+    641-file publisher program. Only the one physical-pedal include is
+    excluded; notes, releases, resonance and controls remain unchanged.
+    """
+    source=Path(source)
+    destination=Path(destination)
+    bank=Path(bank)
+    original=source.read_text()
+    needle='#include "Data/pedal.txt"'
+    if original.count(needle)!=1:
+        raise ValueError("Expected exactly one publisher physical-pedal include")
+    rewritten=original.replace(
+        needle,"// Q4: mechanical pedal regions played in exactly one shared SFZ instance")
+    if rewritten==original or needle in rewritten:
+        raise AssertionError("Physical pedal routing transformation failed")
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    # No source recording bytes are copied or re-encoded.
+    for name in ("Samples","Data"):
+        from_source=bank/name
+        dest_link=destination.parent/name
+        if not from_source.exists():
+            raise FileNotFoundError(from_source)
+        if dest_link.is_symlink():
+            if dest_link.resolve()!=from_source.resolve():
+                raise ValueError("Derived SFZ would reference wrong sample bank")
+        elif not dest_link.exists():
+            dest_link.symlink_to(from_source.resolve(),target_is_directory=True)
+        elif dest_link.resolve()!=from_source.resolve():
+            raise ValueError("Derived program directory contains incompatible sample source")
+    destination.write_text(rewritten)
+
+
 def prepare(root:Path,bank:Path,*,bpm:float, duration_s:float,
             windows:list[tuple[float,float]])->dict:
     root=Path(root)
@@ -129,11 +168,15 @@ def prepare(root:Path,bank:Path,*,bpm:float, duration_s:float,
                             controls["single_mechanism_events"],
                             duration_beats=duration_s*bpm/60)
     write_shared_pedal_sfz(root/"shared_pedal.sfz",bank)
+    source=(Path(bank)/"Salamander Grand Piano V3.sfz")
+    if source.is_file():
+        write_voice_only_sfz(source,root/"voice_program"/"Q4_voice_only.sfz",bank)
     report={"lane_count":plan["lane_plan"]["instance_count"],
             "original_note_count":plan["lane_plan"]["input_notes"],
             "shared_mechanism_instances":1,
             "cc64_movement_count":controls["pedal_movement_count"],
             "note_lane_cc22":0,
+            "mechanism_suppression":"voice-only SFZ derived from unchanged publisher program; CC22=0 not trusted",
             "shared_mechanism_cc22":64,
             "source_sfz_original_unchanged":True,
             "caveat":"Requires full SFZ real-audio test: CC22 gate must be silent on voice lanes."}
