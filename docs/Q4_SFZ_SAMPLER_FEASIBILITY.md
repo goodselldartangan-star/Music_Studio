@@ -12,14 +12,14 @@ The [sfizz 1.2.3 package](https://pkgs.alpinelinux.org/package/edge/testing/x86_
 
 ## Reproducible experiment
 
-[Passing clean real-source sfizz workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/45920391940) downloaded only **five authentic publisher FLACs** at exact upstream commit `3382bf9496bba2486f5ab0de55a264d1dfc38404`. Each is checked against its official Git *blob* SHA before any SFZ is rendered:
+[Passing clean real-source sfizz and lane-planner workflow](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/45920743367) downloaded only **five authentic publisher FLACs** at exact upstream commit `3382bf9496bba2486f5ab0de55a264d1dfc38404`. Each is checked against its official Git *blob* SHA before any SFZ is rendered:
 
 - `C4v12.flac` — sampled C4 note
 - `rel60.flac` — actual key/hammer-release sample
 - `harmV3C4.flac` — separately recorded C4 resonance
 - `pedalD1.flac` and `pedalU1.flac` — mechanism movement recordings
 
-An isolated Alpine Linux container installed `sfizz` v1.2.3 and rendered **19 short MIDI/SFZ cases**. The Python harness passed five independent tests of MIDI pedal/same-pitch scheduling, source authenticity, and old-voice preservation metrics. It did not require the full ~748 MB sample library, alter any prior Music Studio note, or redistribute the original audio samples in GitHub artifacts.
+An isolated Alpine Linux container installed `sfizz` v1.2.3 and rendered **19 short MIDI/SFZ cases**. The Python harness passed **10** independent tests of MIDI pedal/same-pitch scheduling, source authenticity, and old-voice preservation metrics. It did not require the full ~748 MB sample library, alter any prior Music Studio note, or redistribute the original audio samples in GitHub artifacts.
 
 In the inspected *miniature* instrument, actual recorded layers triggered:
 
@@ -43,16 +43,28 @@ With the same C4 note held past a new, shorter C4 attack, the old note's later t
 
 The problem is **not established to be caused solely by `note_polyphony` or the louder note**. The SFZ renderer's handling of a later same-pitch note-off can also release the earlier same-pitch sound. A note-on sum can look correct before that event while the tail is still lost afterward. This is exactly the failure mode the user's piano/strum overlap requirement rejects. The original Music Studio Meta piano sample renderer has independent per-voice envelopes and is unaffected.
 
+## More precise after-note-off measurements
+
+The later test now records the **relative waveform error after the short note has been released**. For the louder C4 re-pluck, the error was **0.97848** in the no-limit SFZ and **0.97984** with `note_polyphony=1`. The independent old-note baseline at 1.4–1.9 seconds had RMS **0.0002828**, but the combined single-synth output was only **0.0000334** (no limit) or **0.0000333** (limited). This is **not** a normal volume match or acceptable isolated old-tail preservation.
+
+A second recorded-note channel did not resolve the issue in `sfizz_render`. The cause is broader than the `note_polyphony` setting: individual MIDI same-pitch note-off semantics and sampler voice handling must be isolated. Do not mistake the nearly linear *before*-new-note-off waveform sum for success.
+
+## New isolated-instance scheduling contract
+
+`studio7/sfz_voice_lanes.py::assign_sfz_voice_lanes` is a separate, **pure planner**, not a player. It assigns a different sampler instance when a previous note of the same pitch is still ringing, with a bounded release guard, while different pitches of a chord can share one instance. It refuses to steal notes when an instance limit is exceeded, and preserves all original score events. The [10-test clean Q4 job](https://github.com/goodselldartangan-star/Music_Studio/actions/runs/45920743367) passed this planner against synthetic same-note fixtures and Silver's scored piano with and without pedal timing.
+
+As a **technical reference only**, the probe also exported a short PCM sum of independently rendered old and new piano notes. This avoids a shared same-key note-off event, demonstrating the desired signal behavior; it does **not** establish a CPU/RAM-efficient full production sampler. The GitHub artifact contains this derived comparison MP3 and the source/license manifest, but not the original publisher sample files.
+
 ## Engineering decision
 
 **Do not switch the Music Studio production piano to sfizz/SFZ yet.** The next narrowly scoped test must use independent sampler instances or truly separate voice-identity handling, verify that an old held C4 continues after the newer C4 is released, and check mechanical/release layers with the full source program before considering integration. Routing a note to another MIDI channel did **not** solve it in this isolated offline test.
 
-The diagnostic script `tools/probe_sfz_piano_q4.py` creates a repeatable, nonproduction reference: add the two notes rendered in separate isolated audio instances. This preserves the old note mathematically but **is not yet a practical high-polyphony sampler backend**. The production solution must be efficient, licensed and regression tested.
+The diagnostic script `tools/probe_sfz_piano_q4.py` creates a repeatable, nonproduction reference by summing two notes rendered in separate isolated sampler processes. This preserves the old note mathematically but **is not yet a practical high-polyphony sampler backend**. The production solution must be efficient, licensed and regression tested.
 
 ## Exact status
 
-- **Verified:** offline sfizz executable, publisher provenance, real sampled pedal and release trigger paths, and measured note-lifecycle blocker.
-- **Not verified or implemented:** complete Salamander source program with all ARIA semantics, dedicated sampler instance pooling, full-song playback, realistic acoustic pedal preference, all 16 velocity layers, user listening approval.
+- **Verified:** offline sfizz executable, pinned publisher provenance, actual sampled pedal and release trigger paths, measured note-lifecycle blocker, and a deterministic score-to-independent-instance lane planner (10 tests).
+- **Not verified or implemented:** complete Salamander source program with all ARIA semantics, actual efficient independent sampler-instance rendering and mixing, full-song playback, realistic acoustic pedal preference, all 16 velocity layers, user listening approval.
 - **Preserved:** original OGG/WAV sample backends, score, note tails, published MP3s and optional earlier Q4 note-off timing mode.
 
 No user files are required at this stage.
