@@ -1,0 +1,136 @@
+name: Q4.2 original guitar and bass articulation source audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audit_articulation_q42.py'
+      - 'tests/test_articulation_source_q42.py'
+      - '.github/workflows/q42-articulation-source-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-articulations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Lightweight offline source-parser regressions
+        run: |
+          python -m unittest tests.test_articulation_source_q42 -v
+          python -m pip install py7zr
+      - name: Retrieve exact official source definitions, reject unverified changes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.parse import quote
+          from urllib.request import Request,urlopen
+          from tools.audit_articulation_q42 import publisher_blob_sha
+          entries={
+            'meta-steel-guitar.json':(
+              'facebookincubator/Meta-open-sound',
+              'systems/instruments/meta-steel-guitar/manifest.json',
+              '245d474c911556ef6cd705f22ad494d37a4535d9'),
+            'meta-nylon-guitar.json':(
+              'facebookincubator/Meta-open-sound',
+              'systems/instruments/meta-nylon-guitar/manifest.json',
+              '07ae443f264bf4707e4aec902c9bfb957cbe841a'),
+            'electric_small.sfz':(
+              'freepats/electric-guitar-FSBS-clean',
+              'EGuitarFSBS-clean bridge small 20260807.sfz',
+              '3d8b63abd86b90d9676b54534f79f142856eda8b'),
+            'finger_bass.sfz':(
+              'freepats/electric-bass-YR',
+              'FingerBassYR 20190930.sfz',
+              '22537b45a1c5fe2d472d6053a4b5a5a5e4be7bf9'),
+            'picked_bass.sfz':(
+              'freepats/electric-bass-YR',
+              'PickedBassYR 20190930.sfz',
+              'b642205a6c005f2014e526434cd5fc9ec6b5fe71'),
+          }
+          root=Path('q42-source')
+          root.mkdir(exist_ok=True)
+          for local,(repo,path,expected) in entries.items():
+              url=f'https://raw.githubusercontent.com/{repo}/main/{quote(path,safe="/")}'
+              with urlopen(Request(url,headers={'User-Agent':'MusicStudio-Q42-Source-Audit'}),timeout=60) as r:
+                  content=r.read()
+              got=publisher_blob_sha(content)
+              if got!=expected:
+                  raise AssertionError(f'Upstream changed identity for {local}: {got}')
+              (root/local).write_bytes(content)
+              print(local,'verified original Git blob',got)
+          PY
+      - name: Download original FreePats released electric and bass SoundFonts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p q42-original-archives
+          gh release download 2026-08-07 \
+            --repo freepats/electric-guitar-FSBS-clean \
+            --pattern 'EGuitarFSBS-clean-bridge-small-SF2-20260807.7z' \
+            --dir q42-original-archives
+          gh release download 2019-09-30 \
+            --repo freepats/electric-bass-YR \
+            --pattern 'FingerBassYR-SF2-20190930.7z' \
+            --dir q42-original-archives
+          gh release download 2019-09-30 \
+            --repo freepats/electric-bass-YR \
+            --pattern 'PickedBassYR-SF2-20190930.7z' \
+            --dir q42-original-archives
+      - name: Extract original SF2 banks only to throwaway CI folder
+        run: |
+          python - <<'PY'
+          import shutil,py7zr
+          from pathlib import Path,PurePosixPath
+          archive=Path('q42-original-archives')
+          dest=Path('q42-fonts')
+          dest.mkdir(exist_ok=True)
+          filenames={
+             'electric_small':'EGuitarFSBS-clean-bridge-small-SF2-20260807.7z',
+             'finger_bass':'FingerBassYR-SF2-20190930.7z',
+             'picked_bass':'PickedBassYR-SF2-20190930.7z'
+          }
+          for kind,filename in filenames.items():
+              temporary=dest/('unpack-'+kind)
+              temporary.mkdir(exist_ok=True)
+              with py7zr.SevenZipFile(archive/filename) as z:
+                  files=z.getnames()
+                  if any(PurePosixPath(p).is_absolute() or '..' in PurePosixPath(p).parts for p in files):
+                      raise ValueError('Unsafe archive path')
+                  z.extractall(path=temporary)
+              candidates=list(temporary.rglob('*.sf2'))
+              if len(candidates)!=1:
+                  raise ValueError(f'Expected one source SF2 in {kind}')
+              shutil.copyfile(candidates[0],dest/f'{kind}.sf2')
+              shutil.rmtree(temporary)
+              print(kind,'original SoundFont bytes:',(dest/f'{kind}.sf2').stat().st_size)
+          PY
+      - name: Audit actual sample labels, SoundFont instrument zones, and CC0 provenance
+        run: |
+          python -m tools.audit_articulation_q42 \
+            --source-root q42-source --fonts q42-fonts \
+            --out q42-reports/articulation_source_inventory.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('q42-reports/articulation_source_inventory.json').read_text())
+          assert d['guitar_meta']['steel']['recorded_note_count']==375
+          assert d['guitar_meta']['nylon']['recorded_note_count']==348
+          assert all(not x['dedicated_articulation_filename_matches'] for x in d['guitar_meta'].values())
+          assert all(x['sample_header_count']>0 and x['instrument_sampleID_zone_count']>0
+                     for x in d['soundfonts'].values())
+          assert all(x['release_trigger_region_count']==0 for x in d['source_sfz'].values())
+          print('Original instrument names inspected; do not assume unlabelled articulations are missing')
+          PY
+      - name: Archive only source-label diagnostic, no original samples
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q42-Original-Instrument-Articulation-Audit
+          path: q42-reports/articulation_source_inventory.json
+          retention-days: 90
