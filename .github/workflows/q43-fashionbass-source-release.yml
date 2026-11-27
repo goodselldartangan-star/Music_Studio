@@ -1,0 +1,102 @@
+name: Q4.3 pinned Fashionbass 426 CC0 source refs and true release WAV probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/probe_fashionbass_q43.py'
+      - 'tests/test_fashionbass_q43.py'
+      - 'tests/fixtures/q43_fashionbass_original_tree.json'
+      - '.github/workflows/q43-fashionbass-source-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  license-and-release-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test source integrity and unchanged source data contracts
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_fashionbass_q43 -v
+      - name: Download only pinned original SFZ text and two original publisher recordings
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.parse import quote
+          from urllib.request import urlopen,Request
+          from tools.audit_articulation_q42 import publisher_blob_sha
+          from tools.probe_fashionbass_q43 import REVISION,SOURCES
+          root=Path('q43-fashionbass')
+          root.mkdir(exist_ok=True)
+          names={
+              'fashionbass.sfz':'3b8c0332ce6267e7fa180f91ef45dd90bad30ae',
+              'fashionbass_clean.sfz':'d12a57ff5e60b0fb7c075b394d2b4c45a683bf3'}
+          for name in [*names,*SOURCES]:
+              url=f'https://raw.githubusercontent.com/sfzinstruments/karoryfer.fashionbass/{REVISION}/{quote(name,safe="/")}'
+              with urlopen(Request(url,headers={'User-Agent':'MusicStudio-Q43-BassResearch'}),timeout=90) as resp:
+                  raw=resp.read()
+              expected=names[name] if name in names else SOURCES[name]
+              if publisher_blob_sha(raw)!=expected:
+                  raise AssertionError('Official publisher Git blob checksum mismatch: '+name)
+              dest=root/('Samples/'+name if name in SOURCES else name)
+              dest.parent.mkdir(parents=True,exist_ok=True)
+              dest.write_bytes(raw)
+              print('Verified',name,len(raw),'source bytes')
+          PY
+      - name: Verify every original SFZ note and release/noise reference against pinned 426-WAV source tree
+        run: |
+          python -m tools.probe_fashionbass_q43 audit --root q43-fashionbass
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('q43-fashionbass/Q43_Fashionbass_source_audit.json').read_text())
+          assert m['all_original_bass_pitches_covered']
+          assert m['source_original_records']==426
+          assert m['source_regions_by_category']=={'notes':285,'release':76,'noises':65}
+          assert m['release_key_groups']==19
+          print('Original source SFZ closure accepted; full original WAV bank NOT downloaded')
+          PY
+      - name: Prepare two sound programs from the same original recorded note, release sample optional
+        run: python -m tools.probe_fashionbass_q43 prepare --root q43-fashionbass
+      - name: Render both recorded-WAV variants in isolated conventional sfizz sampler
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work alpine:edge sh -euc '
+            echo "https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+            apk add --no-cache sfizz
+            for name in Q43_note_only Q43_original_release; do
+              sfizz_render --sfz "q43-fashionbass/$name.sfz" \
+                --midi q43-fashionbass/Q43_original_release.mid \
+                --wav "q43-fashionbass/$name.wav" \
+                -s 44100 --use-eot
+            done
+          '
+      - name: Prove actual recorded release happens only after MIDI note-off
+        run: |
+          python -m tools.probe_fashionbass_q43 inspect --root q43-fashionbass
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('q43-fashionbass/Q43_Fashionbass_2WAV_release_report.json').read_text())
+          assert r['real_recorded_release_trigger_verified']
+          assert r['pre_noteoff_variant_difference_rms']<=1e-6
+          assert r['post_noteoff_recorded_release_difference_rms']>1e-6
+          assert r['original_with_release_peak']<.99
+          print('One original publisher-recorded release sample played after MIDI note-off')
+          PY
+      - name: Keep only compact engineering evidence, never original publisher WAV recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Q43-Fashionbass-Source-And-Authentic-Release
+          path: |
+            q43-fashionbass/Q43_Fashionbass_source_audit.json
+            q43-fashionbass/Q43_Fashionbass_2WAV_release_report.json
+          retention-days: 90
