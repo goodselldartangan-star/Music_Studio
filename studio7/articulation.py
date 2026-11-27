@@ -106,14 +106,20 @@ def assign_voice_channels(events:Sequence[dict], *, release_guard_s:float=.22) -
 
 
 def render_polyphonic(soundfont:Path,notes:list[dict],seconds:float,bpm:int,
-                       *,part:str='electric',program:int=0)->np.ndarray:
+                       *,part:str='electric',program:int=0,
+                       release_guard_s:float|None=None)->np.ndarray:
     """Render melodic SF2 patches with isolated overlapping voices.
 
     Drums retain their original exclusive hi-hat groups and are not routed here.
     """
     if seconds<=0:raise ValueError('Bad duration')
     if part not in PROFILES:raise ValueError('Bad part')
-    events=assign_voice_channels(planned_events(notes,bpm,part=part),release_guard_s=PROFILES[part].release_s)
+    guard=(PROFILES[part].release_s if release_guard_s is None
+           else float(release_guard_s))
+    if not np.isfinite(guard) or not 0<=guard<=2:
+        raise ValueError('Invalid optional voice-release guard')
+    events=assign_voice_channels(planned_events(notes,bpm,part=part),
+                                 release_guard_s=guard)
     engine=FluidSynth(Path(soundfont),gain=.33,drum=False)
     try:
         for ch in {e['channel'] for e in events}:
