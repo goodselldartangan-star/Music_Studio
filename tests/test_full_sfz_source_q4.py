@@ -75,6 +75,16 @@ class OriginalSalamanderAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"MIDI-60"):
                 audit(root,tree)
 
+    def test_any_wrong_midi_key_release_sample_is_caught(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            _,tree=fixture(root)
+            hammer=root/"Data/hammer.txt"
+            hammer.write_text(hammer.read_text().replace(
+                "key=61 sample=rel41.$EXT","key=61 sample=rel42.$EXT"))
+            with self.assertRaisesRegex(ValueError,"MIDI 21-108"):
+                audit(root,tree)
+
     def test_no_sample_bytes_can_be_claimed_verified_without_files(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)
